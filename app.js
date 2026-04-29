@@ -11,6 +11,9 @@ mongoose.connect(url).then(()=>{
 const app=express();
 
 app.use('/admin',admin_routes)
+app.get("/", (req, res) => {
+  res.json({ message: "Academy API is running 🚀" });
+});
 
 app.use((req,res)=>{
     res.status(404).json({
