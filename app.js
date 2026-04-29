@@ -28,3 +28,5 @@ app.use((err,req,res,next)=>{
         code:err.status_code||500
     });
 })
+
+module.exports = app;
