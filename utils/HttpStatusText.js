@@ -5,5 +5,5 @@ const ERORR='error';
 module.exports={
     SUCCESS,
     FAIL,
-    ERORR
+    ERROR
 }
