@@ -54,4 +54,4 @@ const UserSchema=new  mongoose.Schema({
         ref:'Student'
     }]
 },{timestamps:true});
-module.exports=mongoose.model(User,UserSchema);
+module.exports=mongoose.model('User',UserSchema);

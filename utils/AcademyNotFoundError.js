@@ -1,5 +1,5 @@
 const app_error = require("./AppError");
-
+const http_status_text =require('./HttpStatusText');
 class academyNotFound extends Error{
     constructor(){
         super();

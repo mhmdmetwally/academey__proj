@@ -5,11 +5,8 @@ const async_wrapper=require('../middleware/AsyncWrapper');
 const Academy = require('../models/Academy');
 const Student =require('../models/Student');
 
-async function Find_Academy(academy_id){
-    const find_academy = await Academy.find({
-        academy_code : academy_id
-    });
-    return find_academy.length>0;
+async function Find_Academy(id){
+    return await Academy.findOne({ academy_code: id });
 }
 
 const getShowAllAcademey=async_wrapper(
@@ -32,7 +29,7 @@ const getSingleAcademy = async_wrapper(
 
     const academy_id = req.params.academy_id;
 
-    const academy = Find_Academy(academy_id)
+    const academy = await Find_Academy(academy_id)
 
     if (academy) {
        res.json({status:http_status_text.SUCCESS,data:{course}});
@@ -49,7 +46,7 @@ const getCountStudentsAcademy = async_wrapper(async (req, res, next) => {
 
     const academy_id = req.params.academy_id;
 
-    const academy = Find_Academy(academy_id)
+    const academy = await Find_Academy(academy_id)
 
     if (!academy)  {
         const err=new academy_notfound_error();
@@ -77,7 +74,7 @@ const postStopAcademy=async_wrapper(
     async(req,res,next)=>{
         const academy_id = req.params.academy_id;
 
-        const academy = Find_Academy(academy_id)
+        const academy = await Find_Academy(academy_id)
 
         if (academy) {
             const academy = Academy.updateOne(
@@ -97,7 +94,7 @@ const postActiveAcademy=async_wrapper(
     async(req,res,next)=>{
         const {academy_id, subscription_period} = req.params;
 
-        const academy = Find_Academy(academy_id)
+        const academy = await Find_Academy(academy_id)
 
         if (academy) {
             const academy = Academy.updateOne(
