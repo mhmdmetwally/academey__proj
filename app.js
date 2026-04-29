@@ -1,4 +1,4 @@
-require("dotenv").config();
+
 const express=require('express');
 const url=process.env.MONGO_URL;
 const mongoose=require('mongoose');
@@ -24,7 +24,4 @@ app.use((err,req,res,next)=>{
         message:err.message,
         code:err.status_code||500
     });
-})
-app.listen(4000,()=>{
-    console.log('listen on port 4000');
 })
