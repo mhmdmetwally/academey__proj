@@ -4,9 +4,17 @@ const url=process.env.MONGO_URL;
 const mongoose=require('mongoose');
 const http_status_text=require('./utils/HttpStatusText');
 const admin_routes=require('./routes/Admin');
-mongoose.connect(url).then(()=>{
+
+app.use(cors());
+
+try{  
+     mongoose.connect(url).then(()=>{
     console.log('mongodb srvr start');
-})
+    })
+}catch(err){
+    console.error("DB connection error:", err);
+}
+
 
 const app=express();
 
@@ -27,6 +35,7 @@ app.use((err,req,res,next)=>{
         message:err.message,
         code:err.status_code||500
     });
+    next();
 })
 
 module.exports = app;
