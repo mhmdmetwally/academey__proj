@@ -70,7 +70,7 @@ const getCountStudentsAcademy = async_wrapper(async (req, res, next) => {
     });
 });
 
-const postStopAcademy=async_wrapper(
+const patchStopAcademy=async_wrapper(
     async(req,res,next)=>{
         const academy_id = req.params.academy_id;
 
@@ -90,7 +90,7 @@ const postStopAcademy=async_wrapper(
         }
     }
 )
-const postActiveAcademy=async_wrapper(
+const patchActiveAcademy=async_wrapper(
     async(req,res,next)=>{
         const {academy_id, subscription_period} = req.params;
 
@@ -119,6 +119,6 @@ module.exports={
     getCountStudentsAcademy,
     getShowAllAcademey,
     getSingleAcademy,
-    postActiveAcademy,
-    postStopAcademy
+    patchActiveAcademy,
+    patchStopAcademy
 }

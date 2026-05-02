@@ -12,6 +12,12 @@ const UserSchema=new  mongoose.Schema({
             "40 الاسم على الأقل 3 احرف وعلى الأكثر"
         ]
     },
+    phone:{
+        type:String,
+        unique:true,
+        sparse:true,
+        required:true
+    },
     email:{
         type:String,
         unique:true,
@@ -39,7 +45,7 @@ const UserSchema=new  mongoose.Schema({
     },
     role:{
         type:String,
-        enum: ['super_admin', 'academy_admin', 'supervisor', 'teacher', 'family'],
+        enum: ['super_admin', 'supervisor', 'teacher', 'family'],
         required:true
     },
     academy_id:{
@@ -52,6 +58,10 @@ const UserSchema=new  mongoose.Schema({
     assigned_students:[{
         type:mongoose.Schema.Types.ObjectId,
         ref:'Student'
-    }]
+    }],
+    is_active:{
+        type: Boolean,
+        default:false
+    }
 },{timestamps:true});
 module.exports=mongoose.model('User',UserSchema);

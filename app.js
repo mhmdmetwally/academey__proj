@@ -1,3 +1,5 @@
+require("dotenv").config();
+
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
@@ -35,4 +37,6 @@ app.use((err, req, res, next) => {
     });
 });
 
-module.exports = app;
+app.listen(5000,()=>{
+    console.log('serev liste on 5000')
+});

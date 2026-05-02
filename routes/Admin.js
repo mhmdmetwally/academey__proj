@@ -13,9 +13,9 @@ router.route('/academy/singleacademy')
 .get(allowed_tool(user_role.super_admin),admin_controller.getSingleAcademy);
 
 router.route('/academy/stop')
-.post(allowed_tool(user_role.super_admin),admin_controller.postStopAcademy);
+.patch(allowed_tool(user_role.super_admin),admin_controller.patchStopAcademy);
 
 router.route('/academy/active')
-.post(allowed_tool(user_role.super_admin),admin_controller.postActiveAcademy);
+.patch(allowed_tool(user_role.super_admin),admin_controller.patchActiveAcademy);
 
 module.exports=router;
