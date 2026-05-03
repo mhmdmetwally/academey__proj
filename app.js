@@ -5,7 +5,7 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 const http_status_text = require('./utils/HttpStatusText');
 const admin_routes = require('./routes/Admin');
-
+const user_routes = require('./routes/User');
 const app = express();
 const url = process.env.MONGO_URL;
 
@@ -21,7 +21,7 @@ app.get("/", (req, res) => {
 });
 
 app.use('/admin', admin_routes);
-
+app.use('/user',user_routes);
 app.use((req, res) => {
     res.status(404).json({
         status: "FAIL",

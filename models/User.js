@@ -46,6 +46,7 @@ const UserSchema=new  mongoose.Schema({
     role:{
         type:String,
         enum: ['super_admin', 'supervisor', 'teacher', 'family'],
+        default:"supervisor",
         required:true
     },
     academy_id:{
