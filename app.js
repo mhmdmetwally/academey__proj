@@ -1,4 +1,3 @@
-require("dotenv").config();
 
 const express = require('express');
 const cors = require('cors');
@@ -37,6 +36,4 @@ app.use((err, req, res, next) => {
     });
 });
 
-app.listen(5000,()=>{
-    console.log('serev liste on 5000')
-});
+module.exports = app;
