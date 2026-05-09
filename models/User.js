@@ -18,15 +18,6 @@ const UserSchema=new  mongoose.Schema({
         sparse:true,
         required:true
     },
-    email:{
-        type:String,
-        unique:true,
-        sparse:true,
-        required:function(){
-            return this.role === 'supervisor';
-        },
-        validate:[validator.isEmail,"برجاء إدخال بريد إلكتروني صحيح"]
-    },
     password:{
         type:String,
         required:true,
