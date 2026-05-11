@@ -4,6 +4,7 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 const http_status_text = require('./utils/HttpStatusText');
 const admin_routes = require('./routes/Admin');
+const academy_routes = require('./routes/Academy');
 const user_routes = require('./routes/User');
 const app = express();
 const url = process.env.MONGO_URL;
@@ -19,6 +20,8 @@ app.get("/", (req, res) => {
     res.json({ msg: "API running" });
 });
 
+
+app.use('/academy', academy_routes);
 app.use('/admin', admin_routes);
 app.use('/user',user_routes);
 app.use((req, res) => {

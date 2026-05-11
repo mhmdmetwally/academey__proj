@@ -5,7 +5,7 @@ const bcrypt = require('bcrypt');
 const AsyncWrapper = require('../middleware/AsyncWrapper');
 const Users = require('../models/User');
 const app_error = require('../utils/AppError');
-const salt_round = Number(process.env.salt_round)
+const salt_round = Number(process.env.salt_round);
 const register = AsyncWrapper
 (
     async(req,res,next)=>{

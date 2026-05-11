@@ -82,6 +82,10 @@ const patchStopAcademy=async_wrapper(
                 {is_active:false},
                 {new:true}
             )
+            return res.status(200).json({
+                status:http_status_text.SUCCESS,
+                data:academy
+            });
         }
         else {
             const err=new academy_notfound_error();
@@ -105,6 +109,10 @@ const patchActiveAcademy=async_wrapper(
                 },
                 {new:true,runValidators:true}
             )
+            return res.status(200).json({
+                status:http_status_text.SUCCESS,
+                data:academy
+            });
         }
         else {
             const err=new academy_notfound_error();
