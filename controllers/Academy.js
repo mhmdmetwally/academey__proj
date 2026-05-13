@@ -4,6 +4,7 @@ const Academy = require('../models/Academy');
 const app_error = require('../utils/AppError');
 const http_status_text = require('../utils/HttpStatusText');
 const salt_round = Number(process.env.salt_round);
+const user_role = require('../utils/UserRole');
 
 const patchActiveSupervisor = AsyncWrapper(
     async(req,res,next)=>{
@@ -103,6 +104,7 @@ const register = AsyncWrapper
             manager_name: academy.manager_name,
             manager_phone:academy.manager_phone,
             id: academy._id,
+            role:user_role.academy_admin
         };
 
         const token = await gen_token(payload);
@@ -140,6 +142,7 @@ const login = AsyncWrapper
             manager_name: academy.manager_name,
             manager_phone:academy.manager_phone,
             id: academy._id,
+            role:user_role.academy_admin
         });
 
         res.json({
