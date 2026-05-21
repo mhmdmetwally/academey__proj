@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 const app_error = require('../utils/AppError');
-const JWT_SECRET = proccess.env.JWT_SECRET;
+const JWT_SECRET = process.env.JWT_SECRET;
 const http_status_text = require('../utils/HttpStatusText');
 
 const verify_token = (req,res,next)=>{
@@ -24,7 +24,7 @@ const verify_token = (req,res,next)=>{
         req.user=decode_token.payload;
         next();
     }catch(error){
-        const error = new app_error;
+         error = new app_error;
         const message = 'invalid token';
         error.create(message,
             401,
