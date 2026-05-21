@@ -1,4 +1,3 @@
-
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
@@ -20,7 +19,14 @@ app.get("/", (req, res) => {
     res.json({ msg: "API running" });
 });
 
+app.get('/test', (req, res) => {
+    console.log("test route works");
 
+    res.json({
+        mongo: process.env.MONGO_URL
+    });
+});
+~
 app.use('/academy', academy_routes);
 app.use('/admin', admin_routes);
 app.use('/user',user_routes);
