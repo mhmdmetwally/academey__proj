@@ -26,7 +26,7 @@ app.get('/test', (req, res) => {
         mongo: process.env.MONGO_URL
     });
 });
-~
+
 app.use('/academy', academy_routes);
 app.use('/admin', admin_routes);
 app.use('/user',user_routes);
