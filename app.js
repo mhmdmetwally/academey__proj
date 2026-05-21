@@ -11,7 +11,7 @@ const url = process.env.MONGO_URL;
 
 app.use(cors());
 app.use(express.json());
-
+console.log("MONGO =", process.env.MONGO_URL);
 mongoose.connect(url)
     .then(() => console.log('db start'))
     .catch((err) => console.error(err));
