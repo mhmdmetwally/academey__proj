@@ -6,7 +6,6 @@ const http_status_text = require('../utils/HttpStatusText');
 const salt_round = Number(process.env.salt_round);
 const user_role = require('../utils/UserRole');
 const bcrypt = require('bcrypt');
-const salt_round = Number(process.env.salt_round);
 
 const patchActiveSupervisor = AsyncWrapper(
     async(req,res,next)=>{
