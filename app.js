@@ -15,6 +15,8 @@ mongoose.connect(url)
     .then(() => console.log('db start'))
     .catch((err) => console.error(err));
 
+mongoose.set('debug', true);
+
 app.get("/", (req, res) => {
     res.json({ msg: "API running" });
 });
