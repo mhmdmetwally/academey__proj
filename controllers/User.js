@@ -51,27 +51,39 @@ const register = AsyncWrapper
         });
     }
 )
-const login = AsyncWrapper
-(
-    async(req,res,next)=>{
+const login = AsyncWrapper(
+    async (req, res, next) => {
         const { phone, password } = req.body;
 
+        // 1. التأكد من المدخلات
         if (!phone || !password) {
-            return next(new app_error().create("phone and password required", 400, http_status_text.FAIL));
+            const error = new Error("phone and password required");
+            error.status_code = 400;
+            error.status_text = http_status_text.FAIL;
+            return next(error);
         }
 
         const user = await Users.findOne({ phone });
 
+        // 2. لو المستخدم مش موجود
         if (!user) {
-            return next(new app_error().create("user or password are wrong", 404, http_status_text.FAIL));
+            const error = new Error("user or password are wrong");
+            error.status_code = 401; // يفضل 401 (Unauthorized) بدل 404 للأمان
+            error.status_text = http_status_text.FAIL;
+            return next(error);
         }
 
         const matched_password = await bcrypt.compare(password, user.password);
 
+        // 3. لو الباسورد غلط
         if (!matched_password) {
-            return next(new app_error().create("user or password are wrong", 401, http_status_text.FAIL));
+            const error = new Error("user or password are wrong");
+            error.status_code = 401;
+            error.status_text = http_status_text.FAIL;
+            return next(error);
         }
 
+        // 4. عمل الـ Token والرد
         const token = await gen_token({
             phone: user.phone,
             id: user._id,
@@ -83,8 +95,7 @@ const login = AsyncWrapper
             data: { token }
         });
     }
-)
-
+);
 module.exports = {
     register,
     login
