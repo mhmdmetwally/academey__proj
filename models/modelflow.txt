@@ -1,0 +1,101 @@
+                         ┌──────────────┐
+                         │    Academy   │
+                         └──────┬───────┘
+                                │
+              ┌─────────────────┼─────────────────┐
+              │                 │                 │
+              ▼                 ▼                 ▼
+          ┌────────┐       ┌─────────┐       ┌─────────┐
+          │  User  │       │ Teacher │       │ Subject │
+          └────┬───┘       └────┬────┘       └────┬────┘
+               │                │                  │
+        ┌──────┼──────┐         │                  │
+        │      │      │         │                  │
+        ▼      ▼      ▼         │                  │
+     Family  Supervisor Teacher │                  │
+        │                       │                  │
+        │                       └────────┬─────────┘
+        │                                │
+        │                                ▼
+        │                           ┌─────────┐
+        │                           │ Session │
+        │                           └────┬────┘
+        │                                │
+        ▼                                │
+    ┌─────────┐                           │
+    │ Student │◄──────────────────────────┘
+    └────┬────┘
+         │
+         │
+         ▼
+    ┌──────────┐
+    │   Bill   │
+    └────┬─────┘
+         │
+         │
+         ▼
+    ┌──────────┐
+    │ Payment  │
+    └──────────┘
+
+   ...
+   Academy
+ │
+ ├── Users
+ │    ├── Family
+ │    ├── Supervisor
+ │    └── Teacher
+ │
+ ├── Teachers
+ │     └── Subjects
+ │
+ ├── Students
+ │     ├── Family
+ │     ├── Supervisor
+ │     └── Subjects
+ │
+ ├── Sessions
+ │     ├── Teacher
+ │     ├── Student
+ │     └── Subject
+ │
+ ├── Bills
+ │     ├── Student Invoice
+ │     └── Teacher Invoice
+ │
+ └── Payments
+       └── Family → Bills
+.....
+collections
+
+academies
+users
+teachers
+students
+subjects
+sessions
+bills
+payments
+.......
+//Bill
+
+Family
+   │
+   │ pays
+   ▼
+Payment
+   │
+   ├──────► Bill 1 (Ahmed)
+   │
+   └──────► Bill 2 (salma)
+......
+Teacher
+   │
+   ▼
+Sessions
+   │
+   ▼
+Teacher Bill
+   │
+   ▼
+Academy pays Teache

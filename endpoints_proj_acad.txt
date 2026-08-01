@@ -13,3 +13,20 @@
 /admin/academy/singleacademy
 /academy/academy/stop
 /academy/academy/active
+
+///////////////
+bill in flow 
+Family
+  ↓
+Student Invoice
+  ↓
+Academy
+
+////////
+bill out flow
+
+Academy
+  ↓
+Teacher Invoice
+  ↓
+Teacher
