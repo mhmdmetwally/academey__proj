@@ -1,0 +1,19 @@
+                REGISTER ACADEMY
+                       │
+                       ▼
+                  ┌─────────┐
+                  │ Academy │
+                  └────┬────┘
+                       │
+                       ▼
+                  ┌─────────┐
+                  │  User   │
+                  │academy_ │
+                  │  admin  │
+                  └────┬────┘
+                       │
+                       ▼
+                     JWT
+                       │
+                       ▼
+               academy: academyId

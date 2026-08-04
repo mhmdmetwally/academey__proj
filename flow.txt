@@ -1,0 +1,31 @@
+Academy
+   │
+   ├── Users
+   │    ├── academy_admin
+   │    ├── supervisor
+   │    ├── teacher
+   │    └── family
+   │
+   ├── Teachers
+   │
+   ├── Subjects
+   │      ├── Teacher A
+   │      ├── Teacher B
+   │      └── Teacher C
+   │
+   └── Students
+          │
+          └── Subjects
+
+
+Student + Teacher + Subject
+              │
+              ▼
+           Session
+              │
+        ┌─────┴─────┐
+        ▼           ▼
+   Student Bill  Teacher Bill
+        │
+        ▼
+     Payment

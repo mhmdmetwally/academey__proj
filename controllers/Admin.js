@@ -1,132 +1,284 @@
-const app_error=require('../utils/AppError');
-const academy_notfound_error=require('../utils/AcademyNotFoundError')
-const http_status_text=require('../utils/HttpStatusText');
-const async_wrapper=require('../middleware/AsyncWrapper');
-const Academy = require('../models/Academy');
-const Student =require('../models/Student');
+const mongoose = require('mongoose');
 
-async function Find_Academy(id){
-    return await Academy.findOne({ academy_code: id });
+const app_error = require('../utils/AppError');
+const academy_notfound_error = require('../utils/AcademyNotFoundError');
+
+const http_status_text = require('../utils/HttpStatusText');
+
+const async_wrapper = require('../middleware/AsyncWrapper');
+
+const Academy = require('../models/Academy');
+const Student = require('../models/Student');
+
+
+// =========================
+// Find Academy
+// =========================
+
+async function Find_Academy(academy_id) {
+
+    return await Academy.findOne({
+        academy_id
+    });
+
 }
 
-const getShowAllAcademey=async_wrapper(
-    async(req,res,next)=>{
-        const query = req.query;
-        const limit = query.limit || 3;
-        const page = query.page || 1 ;
+
+// =========================
+// Show All Academies
+// =========================
+
+const getShowAllAcademey = async_wrapper(
+    async (req, res, next) => {
+
+        const page = Math.max(
+            Number(req.query.page) || 1,
+            1
+        );
+
+        const limit = Math.min(
+            Number(req.query.limit) || 3,
+            100
+        );
+
         const skip = (page - 1) * limit;
-        const academes = await Academy.find({},{"__v":false}).
-                            limit(limit).skip(skip);
-        res.json({
-            status : http_status_text.SUCCESS,
-            data:{academes}
+
+        const academies = await Academy
+            .find({})
+            .select('-__v')
+            .limit(limit)
+            .skip(skip)
+            .sort({
+                createdAt: -1
+            });
+
+        const total = await Academy.countDocuments();
+
+        return res.json({
+
+            status: http_status_text.SUCCESS,
+
+            data: {
+                academies,
+
+                pagination: {
+                    page,
+                    limit,
+                    total,
+                    pages: Math.ceil(total / limit)
+                }
+            }
+
         });
+
     }
-)
+);
+
+
+// =========================
+// Get Single Academy
+// =========================
 
 const getSingleAcademy = async_wrapper(
-  async (req, res,next) => {
+    async (req, res, next) => {
 
-    const academy_id = req.params.academy_id;
-
-    const academy = await Find_Academy(academy_id)
-
-    if (academy) {
-       res.json({status:http_status_text.SUCCESS,data:{course}});
-    } else {
-        const err=new academy_notfound_error();
-        err.CreateAcademyError(academy_id);
-        return next(err);  
-    }
-
-  }
-)
-
-const getCountStudentsAcademy = async_wrapper(async (req, res, next) => {
-
-    const academy_id = req.params.academy_id;
-
-    const academy = await Find_Academy(academy_id)
-
-    if (!academy)  {
-        const err=new academy_notfound_error();
-        err.CreateAcademyError(academy_id);
-        return next(err);  
-    }
-
-    const result = await Student.aggregate([
-       { $match: { academy_id: mongoose.Types.ObjectId(academy_code) } },
-        { $group: { _id: "$academy_id", count: { $sum: 1 } } }
-    ]);
-
-    const studentCount = result.length > 0 ? result[0].count : 0;
-
-    res.status(200).json({
-        status: http_status_text.SUCCESS,
-        data: { 
-            academy_name: academy.academy_name,
-            student_count: studentCount 
-        }
-    });
-});
-
-const patchStopAcademy=async_wrapper(
-    async(req,res,next)=>{
         const academy_id = req.params.academy_id;
 
-        const academy = await Find_Academy(academy_id)
+        const academy = await Find_Academy(
+            academy_id
+        );
 
-        if (academy) {
-            const academy = Academy.updateOne(
-                academy_code,
-                {is_active:false},
-                {new:true}
-            )
-            return res.status(200).json({
-                status:http_status_text.SUCCESS,
-                data:academy
-            });
+        if (!academy) {
+
+            const err = new academy_notfound_error();
+
+            return next(
+                err.CreateAcademyError(academy_id)
+            );
         }
-        else {
-            const err=new academy_notfound_error();
-            err.CreateAcademyError(academy_id);
-            return next(err);  
-        }
+
+        return res.json({
+
+            status: http_status_text.SUCCESS,
+
+            data: {
+                academy
+            }
+
+        });
+
     }
-)
-const patchActiveAcademy=async_wrapper(
-    async(req,res,next)=>{
-        const {academy_id, subscription_period} = req.params;
+);
 
-        const academy = await Find_Academy(academy_id)
 
-        if (academy) {
-            const academy = Academy.updateOne(
-                academy_code,
+// =========================
+// Count Students
+// =========================
+
+const getCountStudentsAcademy = async_wrapper(
+    async (req, res, next) => {
+
+        const academy_id = req.params.academy_id;
+
+        const academy = await Find_Academy(
+            academy_id
+        );
+
+        if (!academy) {
+
+            const err = new academy_notfound_error();
+
+            return next(
+                err.CreateAcademyError(academy_id)
+            );
+        }
+
+        const studentCount = await Student.countDocuments({
+            academy: academy._id
+        });
+
+        return res.status(200).json({
+
+            status: http_status_text.SUCCESS,
+
+            data: {
+                academy_name: academy.academy_name,
+
+                student_count: studentCount
+            }
+
+        });
+
+    }
+);
+
+
+// =========================
+// Stop Academy
+// =========================
+
+const patchStopAcademy = async_wrapper(
+    async (req, res, next) => {
+
+        const academy_id = req.params.academy_id;
+
+        const academy = await Find_Academy(
+            academy_id
+        );
+
+        if (!academy) {
+
+            const err = new academy_notfound_error();
+
+            return next(
+                err.CreateAcademyError(academy_id)
+            );
+        }
+
+        const updated_academy =
+            await Academy.findOneAndUpdate(
+
                 {
-                    is_active:true,
-                    subscription_period:subscription_period
+                    academy_id
                 },
-                {new:true,runValidators:true}
-            )
-            return res.status(200).json({
-                status:http_status_text.SUCCESS,
-                data:academy
-            });
-        }
-        else {
-            const err=new academy_notfound_error();
-            err.CreateAcademyError(academy_id);
-            return next(err);  
-        }
+
+                {
+                    is_active: false
+                },
+
+                {
+                    new: true,
+                    runValidators: true
+                }
+
+            );
+
+        return res.status(200).json({
+
+            status: http_status_text.SUCCESS,
+
+            data: {
+                academy: updated_academy
+            }
+
+        });
+
     }
-)
+);
 
 
-module.exports={
+// =========================
+// Activate Academy
+// =========================
+
+const patchActiveAcademy = async_wrapper(
+    async (req, res, next) => {
+
+        const academy_id = req.params.academy_id;
+
+        const {
+            subscription_period
+        } = req.body;
+
+        const academy = await Find_Academy(
+            academy_id
+        );
+
+        if (!academy) {
+
+            const err = new academy_notfound_error();
+
+            return next(
+                err.CreateAcademyError(academy_id)
+            );
+        }
+
+        const updated_academy =
+            await Academy.findOneAndUpdate(
+
+                {
+                    academy_id
+                },
+
+                {
+                    is_active: true,
+
+                    ...(subscription_period && {
+                        subscription_period
+                    })
+                },
+
+                {
+                    new: true,
+                    runValidators: true
+                }
+
+            );
+
+        return res.status(200).json({
+
+            status: http_status_text.SUCCESS,
+
+            data: {
+                academy: updated_academy
+            }
+
+        });
+
+    }
+);
+
+
+module.exports = {
+
     getCountStudentsAcademy,
+
     getShowAllAcademey,
+
     getSingleAcademy,
+
     patchActiveAcademy,
+
     patchStopAcademy
-}
+
+};
