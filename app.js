@@ -18,6 +18,20 @@ const user_routes =
 const teacher_routes =
     require('./routes/Teacher');
 
+const student_routes =
+    require('./routes/Student');
+
+const supervisor_routes =
+    require('./routes/Supervisor');
+
+const family_routes =
+    require('./routes/Family');
+
+const student_subject_routes =
+    require('./routes/StudentSubject');
+
+const lesson_routes =
+    require('./routes/Lesson');
 
 const app = express();
 
@@ -118,7 +132,30 @@ app.use(
     teacher_routes
 );
 
+app.use(
+    '/student',
+     student_routes
+);
 
+app.use(
+    '/supervisor',
+     supervisor_routes
+);
+
+app.use(
+    '/family',
+     family_routes
+);
+
+app.use(
+    '/student-subject',
+    student_subject_routes
+);
+
+app.use(
+    '/lesson',
+    lesson_routes
+);
 // =====================================================
 // 404
 // =====================================================

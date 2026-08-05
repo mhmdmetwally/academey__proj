@@ -62,10 +62,9 @@ const UserSchema = new mongoose.Schema({
             'super_admin',
             'supervisor',
             'teacher',
-            'family'
+            'family',
+            'student'
         ],
-
-        default: 'supervisor',
 
         required: true
     },

@@ -1,10 +1,10 @@
 const mongoose = require('mongoose');
 
-const TeacherAssignmentSchema = new mongoose.Schema({
+const SupervisorSchema = new mongoose.Schema({
 
-    teacher: {
+    user: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Teacher',
+        ref: 'User',
         required: true
     },
 
@@ -12,18 +12,6 @@ const TeacherAssignmentSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Academy',
         required: true
-    },
-
-    supervisor: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'SupervisorAssignment',
-        required: true
-    },
-
-    price_per_lesson: {
-        type: Number,
-        required: true,
-        min: 0
     },
 
     is_active: {
@@ -35,9 +23,9 @@ const TeacherAssignmentSchema = new mongoose.Schema({
     timestamps: true
 });
 
-TeacherAssignmentSchema.index(
+SupervisorSchema.index(
     {
-        teacher: 1,
+        user: 1,
         academy_id: 1
     },
     {
@@ -47,6 +35,6 @@ TeacherAssignmentSchema.index(
 
 module.exports =
     mongoose.model(
-        'TeacherAssignment',
-        TeacherAssignmentSchema
+        'Supervisor',
+        SupervisorSchema
     );

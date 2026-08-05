@@ -18,7 +18,7 @@ const verify_token = (
 ) => {
 
     const auth_header =
-        req.headers["authorization"];
+        req.headers['authorization'];
 
 
     if (!auth_header) {
@@ -33,6 +33,7 @@ const verify_token = (
         );
 
         return next(error);
+
     }
 
 
@@ -55,6 +56,7 @@ const verify_token = (
         );
 
         return next(error);
+
     }
 
 
@@ -77,22 +79,20 @@ const verify_token = (
 
         next();
 
-    }
+    } catch (error) {
 
-    catch (error) {
-
-        const new_error =
+        const auth_error =
             new app_error();
 
-        new_error.create(
+        auth_error.create(
             'invalid token',
             401,
             http_status_text.ERROR
         );
 
-        next(new_error);
-    }
+        next(auth_error);
 
+    }
 };
 
 

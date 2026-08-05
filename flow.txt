@@ -1,31 +1,55 @@
-Academy
-   │
-   ├── Users
-   │    ├── academy_admin
-   │    ├── supervisor
-   │    ├── teacher
-   │    └── family
-   │
-   ├── Teachers
-   │
-   ├── Subjects
-   │      ├── Teacher A
-   │      ├── Teacher B
-   │      └── Teacher C
-   │
-   └── Students
+
+User
+│
+├── Teacher User
+│      │
+│      └── Teacher Assignment
+│             └── Academy
+│
+├── Supervisor User
+│      │
+│      └── Supervisor Assignment
+│             └── Academy
+│
+├── Family User
+│
+└── Student User
+       │
+       └── Student
+              │
+              ├── Assignment → Academy A
+              │                 ├── Family
+              │                 └── Supervisor
+              │
+              └── Assignment → Academy B
+                                ├── Family
+                                └── Supervisor
+
+
+                         User
+                          │
+        ┌─────────────────┼──────────────────┐
+        │                 │                  │
+     Teacher          Supervisor           Family
+        │                 │                  │
+        ▼                 ▼                  │
+ TeacherAssignment   SupervisorAssignment    │
+        │                 │                  │
+        └──────────── Academy ───────────────┘
+                          │
+                          │
+                     StudentAssignment
+                          │
+                ┌─────────┼─────────┐
+                │         │         │
+             Student   Supervisor   Family
+                │
+                ▼
+          StudentSubject
+                │
+          ┌─────┴─────┐
+          ▼           ▼
+       Subject      Teacher
           │
-          └── Subjects
-
-
-Student + Teacher + Subject
-              │
-              ▼
-           Session
-              │
-        ┌─────┴─────┐
-        ▼           ▼
-   Student Bill  Teacher Bill
-        │
-        ▼
-     Payment
+          ▼
+         Bill

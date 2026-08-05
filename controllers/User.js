@@ -20,22 +20,23 @@ const salt_round =
     Number(process.env.salt_round);
 
 
-// =====================================================
-// Register User
-// =====================================================
+/*
+=====================================================
+Register
+=====================================================
+*/
 
 const register = AsyncWrapper(
+
     async (req, res, next) => {
 
-        const new_user = req.body;
+        const new_user =
+            req.body;
 
-
-        // =========================================
-        // Prevent creating super_admin
-        // =========================================
 
         if (
-            new_user.role === 'super_admin'
+            new_user.role ===
+            'super_admin'
         ) {
 
             const error =
@@ -51,13 +52,12 @@ const register = AsyncWrapper(
         }
 
 
-        // =========================================
-        // Check phone
-        // =========================================
-
         const cur_user =
             await Users.findOne({
-                phone: new_user.phone
+
+                phone:
+                    new_user.phone
+
             });
 
 
@@ -67,7 +67,7 @@ const register = AsyncWrapper(
                 new app_error();
 
             error.create(
-                `${cur_user.phone} already exists`,
+                `${cur_user.phone} already exist!`,
                 409,
                 http_status_text.FAIL
             );
@@ -76,38 +76,23 @@ const register = AsyncWrapper(
         }
 
 
-        // =========================================
-        // Hash password
-        // =========================================
-
         const hashed_password =
             await bcrypt.hash(
+
                 new_user.password,
+
                 salt_round
+
             );
 
-
-        // =========================================
-        // Create User
-        // =========================================
 
         const user =
             new Users({
 
-                name:
-                    new_user.name,
-
-                phone:
-                    new_user.phone,
+                ...new_user,
 
                 password:
-                    hashed_password,
-
-                role:
-                    new_user.role,
-
-                is_active:
-                    new_user.is_active ?? false
+                    hashed_password
 
             });
 
@@ -115,26 +100,22 @@ const register = AsyncWrapper(
         await user.save();
 
 
-        // =========================================
-        // Token
-        // =========================================
-
-        const payload = {
-
-            phone:
-                user.phone,
-
-            id:
-                user._id,
-
-            role:
-                user.role
-
-        };
-
-
         const token =
-            await gen_token(payload);
+            await gen_token({
+
+                phone:
+                    user.phone,
+
+                id:
+                    user._id,
+
+                role:
+                    user.role,
+
+                academy_id:
+                    user.academy_id
+
+            });
 
 
         user.password =
@@ -147,11 +128,8 @@ const register = AsyncWrapper(
                 http_status_text.SUCCESS,
 
             data: {
-
                 user,
-
                 token
-
             }
 
         });
@@ -160,9 +138,11 @@ const register = AsyncWrapper(
 );
 
 
-// =====================================================
-// Login
-// =====================================================
+/*
+=====================================================
+Login
+=====================================================
+*/
 
 const login = AsyncWrapper(
 
@@ -189,12 +169,15 @@ const login = AsyncWrapper(
             );
 
             return next(error);
+
         }
 
 
         const user =
             await Users.findOne({
+
                 phone
+
             });
 
 
@@ -210,28 +193,17 @@ const login = AsyncWrapper(
             );
 
             return next(error);
-        }
 
-
-        if (!user.is_active) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'user is not active',
-                403,
-                http_status_text.FAIL
-            );
-
-            return next(error);
         }
 
 
         const matched_password =
             await bcrypt.compare(
+
                 password,
+
                 user.password
+
             );
 
 
@@ -247,6 +219,7 @@ const login = AsyncWrapper(
             );
 
             return next(error);
+
         }
 
 
@@ -260,7 +233,10 @@ const login = AsyncWrapper(
                     user._id,
 
                 role:
-                    user.role
+                    user.role,
+
+                academy_id:
+                    user.academy_id
 
             });
 
@@ -271,9 +247,7 @@ const login = AsyncWrapper(
                 http_status_text.SUCCESS,
 
             data: {
-
                 token
-
             }
 
         });
