@@ -1,52 +1,52 @@
 const mongoose = require('mongoose');
 
-const TeacherAssignmentSchema = new mongoose.Schema({
-
-    teacher: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Teacher',
-        required: true
-    },
-
-    academy_id: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Academy',
-        required: true
-    },
-
-    supervisor: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Supervisor',
-        required: true
-    },
-
-    price_per_lesson: {
-        type: Number,
-        required: true,
-        min: 0
-    },
-
-    is_active: {
-        type: Boolean,
-        default: true
-    }
-
-}, {
-    timestamps: true
-});
-
-TeacherAssignmentSchema.index(
+const SubjectSchema = new mongoose.Schema(
     {
-        teacher: 1,
-        academy_id: 1
+        name: {
+            type: String,
+            required: true,
+            trim: true
+        },
+
+        // الأكاديمية التي تملك المادة
+        academy_id: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Academy',
+            required: true
+        },
+
+        // السعر الافتراضي للحصة في الأكاديمية
+        // يمكن تغييره لطالب معين داخل StudentSubject
+        student_price: {
+            type: Number,
+            required: true,
+            min: 0
+        },
+
+        is_active: {
+            type: Boolean,
+            default: true
+        }
+    },
+    {
+        timestamps: true
+    }
+);
+
+
+// نفس المادة لا تتكرر داخل نفس الأكاديمية
+SubjectSchema.index(
+    {
+        academy: 1,
+        name: 1
     },
     {
         unique: true
     }
 );
 
-module.exports =
-    mongoose.model(
-        'TeacherAssignment',
-        TeacherAssignmentSchema
-    );
+
+module.exports = mongoose.model(
+    'Subject',
+    SubjectSchema
+);
