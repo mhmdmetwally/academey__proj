@@ -1,62 +1,114 @@
-const PaymentSchema = new mongoose.Schema({
+const mongoose = require('mongoose');
 
-    academy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Academy',
-        required: true
-    },
-
-    family: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        required: true
-    },
-
-    amount: {
-        type: Number,
-        required: true,
-        min: 0
-    },
-
-    allocations: [{
-        bill: {
+const PaymentSchema = new mongoose.Schema(
+    {
+        academy_id: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: 'Bill',
+            ref: 'Academy',
             required: true
         },
 
-        student: {
+        family: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: 'Student',
+            ref: 'User',
             required: true
+        },
+
+        /*
+        null when payment is an advance
+        */
+
+        invoice: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Invoice',
+            default: null
         },
 
         amount: {
             type: Number,
             required: true,
+            min: 0.01
+        },
+
+        /*
+        Amount that has not been allocated
+        to invoices yet.
+        */
+
+        remaining_amount: {
+            type: Number,
+            required: true,
             min: 0
+        },
+
+        type: {
+            type: String,
+
+            enum: [
+                'invoice_payment',
+                'advance'
+            ],
+
+            required: true
+        },
+
+        method: {
+            type: String,
+
+            enum: [
+                'cash',
+                'bank_transfer',
+                'wallet',
+                'card',
+                'other'
+            ],
+
+            default: 'cash'
+        },
+
+        payment_date: {
+            type: Date,
+            default: Date.now
+        },
+
+        reference: {
+            type: String,
+            trim: true
+        },
+
+        notes: {
+            type: String,
+            trim: true
+        },
+
+        status: {
+            type: String,
+
+            enum: [
+                'completed',
+                'cancelled'
+            ],
+
+            default: 'completed'
         }
-    }],
-
-    payment_method: {
-        type: String,
-        enum: [
-            'cash',
-            'bank_transfer',
-            'online'
-        ],
-        default: 'cash'
     },
+    {
+        timestamps: true
+    }
+);
 
-    payment_date: {
-        type: Date,
-        default: Date.now
-    },
 
-    notes: String
-
-}, {
-    timestamps: true
+PaymentSchema.index({
+    academy_id: 1,
+    family: 1
 });
 
-module.exports = mongoose.model('Payment', PaymentSchema);
+
+PaymentSchema.index({
+    academy_id: 1,
+    payment_date: 1
+});
+
+
+module.exports =
+    mongoose.model('Payment', PaymentSchema);

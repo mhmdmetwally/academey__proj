@@ -32,12 +32,29 @@ POST   /subject/:subject_id/teacher/:teacher_id
 DELETE /subject/:subject_id/teacher/:teacher_id
 
 
+POST   /student-subject/student/:student_assignment_id
+GET    /student-subject/student/:student_assignment_id
+PATCH  /student-subject/:student_subject_id/teacher
+PATCH  /student-subject/:student_subject_id/price
+DELETE /student-subject/:student_subject_id
+
+
 POST   /lesson
 GET    /lesson
 GET    /lesson/student/:student_assignment_id
 PATCH  /lesson/:lesson_id/status
 DELETE /lesson/:lesson_id
 
+
+POST   /invoice
+GET    /invoice
+GET    /invoice/:invoice_id
+DELETE /invoice/:invoice_id
+
+
+POST   /payment
+GET    /payment
+GET    /payment/:payment_id
 
 ///////////////
 bill in flow 

@@ -1,10 +1,8 @@
-const express =
-    require('express');
+const express = require('express');
 
-const router =
-    express.Router();
+const router = express.Router();
 
-const controller =
+const student_subject_controller =
     require('../controllers/StudentSubject');
 
 const verify_token =
@@ -26,12 +24,11 @@ router.route(
 )
 .post(
     verify_token,
-
     allowed_tool(
-        user_role.academy_admin
+        user_role.academy_admin,
+        user_role.supervisor
     ),
-
-    controller.addSubjectToStudent
+    student_subject_controller.addSubjectToStudent
 );
 
 
@@ -44,12 +41,11 @@ router.route(
 )
 .get(
     verify_token,
-
     allowed_tool(
-        user_role.academy_admin
+        user_role.academy_admin,
+        user_role.supervisor
     ),
-
-    controller.getStudentSubjects
+    student_subject_controller.getStudentSubjects
 );
 
 
@@ -62,17 +58,33 @@ router.route(
 )
 .patch(
     verify_token,
-
     allowed_tool(
-        user_role.academy_admin
+        user_role.academy_admin,
+        user_role.supervisor
     ),
-
-    controller.changeStudentTeacher
+    student_subject_controller.changeStudentTeacher
 );
 
 
 // =====================================================
-// Remove Subject
+// Change Student Price
+// =====================================================
+
+router.route(
+    '/:student_subject_id/price'
+)
+.patch(
+    verify_token,
+    allowed_tool(
+        user_role.academy_admin,
+        user_role.supervisor
+    ),
+    student_subject_controller.changeStudentPrice
+);
+
+
+// =====================================================
+// Remove Subject From Student
 // =====================================================
 
 router.route(
@@ -80,14 +92,12 @@ router.route(
 )
 .delete(
     verify_token,
-
     allowed_tool(
-        user_role.academy_admin
+        user_role.academy_admin,
+        user_role.supervisor
     ),
-
-    controller.removeSubjectFromStudent
+    student_subject_controller.removeSubjectFromStudent
 );
 
 
-module.exports =
-    router;
+module.exports = router;

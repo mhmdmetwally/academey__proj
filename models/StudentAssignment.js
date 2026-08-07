@@ -1,70 +1,79 @@
-
 const mongoose = require('mongoose');
 
-const LessonSchema = new mongoose.Schema({
+const StudentAssignmentSchema = new mongoose.Schema(
+    {
+        // الطالب الأصلي
+        student: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Student',
+            required: true
+        },
 
-    academy_id: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Academy',
-        required: true
+        // الأكاديمية التي يدرس فيها الطالب
+        academy_id: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Academy',
+            required: true
+        },
+
+        // الـ Family المسؤولة عن الطالب
+        family: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
+            required: true
+        },
+
+        // الـ Supervisor المسؤول عن الطالب داخل الأكاديمية
+        supervisor: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
+            required: true
+        },
+
+        is_active: {
+            type: Boolean,
+            default: true
+        },
+
+        joined_at: {
+            type: Date,
+            default: Date.now
+        }
     },
-
-    student_assignment: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'StudentAssignment',
-        required: true
-    },
-
-    student: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Student',
-        required: true
-    },
-
-    student_subject: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'StudentSubject',
-        required: true
-    },
-
-    teacher: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'TeacherAssignment',
-        required: true
-    },
-
-    lesson_date: {
-        type: Date,
-        required: true
-    },
-
-    status: {
-        type: String,
-        enum: [
-            'scheduled',
-            'completed',
-            'cancelled'
-        ],
-        default: 'scheduled'
-    },
-
-    notes: {
-        type: String,
-        trim: true
+    {
+        timestamps: true
     }
+);
 
-}, {
-    timestamps: true
+
+// نفس الطالب لا يتكرر في نفس الأكاديمية
+StudentAssignmentSchema.index(
+    {
+        student: 1,
+        academy_id: 1
+    },
+    {
+        unique: true
+    }
+);
+
+
+// البحث السريع عن طلاب Supervisor
+StudentAssignmentSchema.index({
+    academy_id: 1,
+    supervisor: 1
 });
 
 
-LessonSchema.index({
+// البحث عن طلاب Family داخل الأكاديمية
+StudentAssignmentSchema.index({
     academy_id: 1,
-    student_assignment: 1,
-    lesson_date: 1
+    family: 1
 });
 
 
 module.exports =
-    mongoose.model('Lesson', LessonSchema);
-
+    mongoose.model(
+        'StudentAssignment',
+        StudentAssignmentSchema
+    );

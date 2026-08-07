@@ -1,4 +1,5 @@
-const mongoose = require('mongoose');
+const mongoose =
+    require('mongoose');
 
 const StudentAssignment =
     require('../models/StudentAssignment');
@@ -19,18 +20,13 @@ const user_role =
     require('./UserRole');
 
 
-/*
-=====================================================
-Get Academy ID
-=====================================================
-*/
+// =====================================================
+// Get Academy ID
+// =====================================================
 
 const getAcademyId = (req) => {
 
-    /*
-    Academy Admin
-    */
-
+    // Academy Admin
     if (
         req.user.role ===
         user_role.academy_admin
@@ -41,19 +37,14 @@ const getAcademyId = (req) => {
     }
 
 
-    /*
-    Supervisor / Teacher / Family
-    */
-
+    // Supervisor / Teacher / Family
     return req.user.academy_id;
 };
 
 
-/*
-=====================================================
-Validate ObjectId
-=====================================================
-*/
+// =====================================================
+// Validate ObjectId
+// =====================================================
 
 const isValidObjectId = (id) => {
 
@@ -62,11 +53,9 @@ const isValidObjectId = (id) => {
 };
 
 
-/*
-=====================================================
-Get Supervisor Assignment
-=====================================================
-*/
+// =====================================================
+// Get Supervisor Assignment
+// =====================================================
 
 const getSupervisorAssignment =
     async (req) => {
@@ -104,11 +93,9 @@ const getSupervisorAssignment =
     };
 
 
-/*
-=====================================================
-Student Access
-=====================================================
-*/
+// =====================================================
+// Student Access
+// =====================================================
 
 const getStudentAssignmentForUser =
     async (
@@ -136,10 +123,7 @@ const getStudentAssignmentForUser =
         }
 
 
-        /*
-        Academy Admin
-        */
-
+        // Academy Admin
         if (
             req.user.role ===
             user_role.academy_admin
@@ -159,10 +143,7 @@ const getStudentAssignmentForUser =
         }
 
 
-        /*
-        Supervisor
-        */
-
+        // Supervisor
         if (
             req.user.role ===
             user_role.supervisor
@@ -198,11 +179,9 @@ const getStudentAssignmentForUser =
     };
 
 
-/*
-=====================================================
-Teacher Access
-=====================================================
-*/
+// =====================================================
+// Teacher Access
+// =====================================================
 
 const getTeacherAssignmentForUser =
     async (
@@ -230,10 +209,7 @@ const getTeacherAssignmentForUser =
         }
 
 
-        /*
-        Academy Admin
-        */
-
+        // Academy Admin
         if (
             req.user.role ===
             user_role.academy_admin
@@ -253,10 +229,7 @@ const getTeacherAssignmentForUser =
         }
 
 
-        /*
-        Supervisor
-        */
-
+        // Supervisor
         if (
             req.user.role ===
             user_role.supervisor
@@ -292,11 +265,9 @@ const getTeacherAssignmentForUser =
     };
 
 
-/*
-=====================================================
-Student Subject Access
-=====================================================
-*/
+// =====================================================
+// Student Subject Access
+// =====================================================
 
 const getStudentSubjectForUser =
     async (
@@ -315,22 +286,11 @@ const getStudentSubjectForUser =
         }
 
 
-        const academy_id =
-            getAcademyId(req);
-
-
-        if (!academy_id) {
-            return null;
-        }
-
-
         const studentSubject =
             await StudentSubject.findOne({
 
                 _id:
                     student_subject_id,
-
-                academy_id,
 
                 is_active: true
 
@@ -361,11 +321,9 @@ const getStudentSubjectForUser =
     };
 
 
-/*
-=====================================================
-Lesson Access
-=====================================================
-*/
+// =====================================================
+// Lesson Access
+// =====================================================
 
 const getLessonForUser =
     async (
@@ -409,10 +367,7 @@ const getLessonForUser =
         }
 
 
-        /*
-        Academy Admin
-        */
-
+        // Academy Admin
         if (
             req.user.role ===
             user_role.academy_admin
@@ -423,10 +378,7 @@ const getLessonForUser =
         }
 
 
-        /*
-        Supervisor
-        */
-
+        // Supervisor
         if (
             req.user.role ===
             user_role.supervisor
@@ -448,7 +400,6 @@ const getLessonForUser =
 
 
             return lesson;
-
         }
 
 

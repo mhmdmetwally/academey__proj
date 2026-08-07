@@ -33,6 +33,12 @@ const student_subject_routes =
 const lesson_routes =
     require('./routes/Lesson');
 
+const invoice_routes =
+    require('./routes/Invoice');
+
+const payment_routes =
+    require('./routes/Payment');
+
 const app = express();
 
 const url =
@@ -156,6 +162,17 @@ app.use(
     '/lesson',
     lesson_routes
 );
+
+app.use(
+    '/invoice',
+    invoice_routes
+);
+
+app.use(
+    '/payment',
+    payment_routes
+);
+
 // =====================================================
 // 404
 // =====================================================
