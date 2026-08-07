@@ -16,7 +16,7 @@ const TeacherAssignmentSchema = new mongoose.Schema({
 
     supervisor: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'SupervisorAssignment',
+        ref: 'Supervisor',
         required: true
     },
 
@@ -35,6 +35,7 @@ const TeacherAssignmentSchema = new mongoose.Schema({
     timestamps: true
 });
 
+
 TeacherAssignmentSchema.index(
     {
         teacher: 1,
@@ -44,6 +45,7 @@ TeacherAssignmentSchema.index(
         unique: true
     }
 );
+
 
 module.exports =
     mongoose.model(

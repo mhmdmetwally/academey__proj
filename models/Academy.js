@@ -1,102 +1,72 @@
-const mongoose = require('mongoose');
-const validator = require('validator');
-
-const AcademySchema = new mongoose.Schema({
-
-    academy_name: {
-        type: String,
-        required: true,
-        trim: true,
-
-        validate: [
-            (value) =>
-                validator.isLength(
-                    value,
-                    {
-                        min: 3,
-                        max: 100
-                    }
-                ),
-
-            "اسم الأكاديمية على الأقل 3 أحرف وعلى الأكثر 100"
-        ]
-    },
+const express =
+    require('express');
 
 
-    manager_phone: {
-        type: String,
-        required: true,
-        trim: true
-    },
+const router =
+    express.Router();
 
 
-    manager_name: {
-        type: String,
-        required: true,
-        trim: true,
-
-        validate: [
-            (value) =>
-                validator.isLength(
-                    value,
-                    {
-                        min: 3,
-                        max: 40
-                    }
-                ),
-
-            "الاسم على الأقل 3 احرف وعلى الأكثر 40"
-        ]
-    },
+const academy_controller =
+    require('../controllers/Academy');
 
 
-    academy_code: {
-        type: String,
-        required: true,
-        unique: true,
-        trim: true
-    },
+const allowed_tool =
+    require('../middleware/AllowedTools');
 
 
-    password: {
-        type: String,
-        required: true
-    },
+const user_role =
+    require('../utils/UserRole');
 
 
-    is_active: {
-        type: Boolean,
-        default: false
-    },
+const verify_token =
+    require('../middleware/VerifyToken');
 
 
-    subscription_period: {
-        type: Date,
-        default: null
-    },
+// =====================================================
+// Public
+// =====================================================
+
+router.post(
+    '/register',
+    academy_controller.register
+);
 
 
-    finance: {
+router.post(
+    '/login',
+    academy_controller.login
+);
 
-        total_revenue: {
-            type: Number,
-            default: 0,
-            min: 0
-        },
 
-        total_expenses: {
-            type: Number,
-            default: 0,
-            min: 0
-        }
+// =====================================================
+// Academy Admin
+// =====================================================
 
-    }
+router.patch(
+    '/supervisor/active',
 
-}, {
-    timestamps: true
-});
+    verify_token,
+
+    allowed_tool(
+        user_role.academy_admin
+    ),
+
+    academy_controller.patchActiveSupervisor
+);
+
+
+router.patch(
+    '/supervisor/stop',
+
+    verify_token,
+
+    allowed_tool(
+        user_role.academy_admin
+    ),
+
+    academy_controller.patchStopSupervisor
+);
 
 
 module.exports =
-    mongoose.model('Academy', AcademySchema);
-
+    router;

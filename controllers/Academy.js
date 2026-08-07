@@ -1,9 +1,11 @@
-
 const AsyncWrapper =
     require('../middleware/AsyncWrapper');
 
 const Academy =
     require('../models/Academy');
+
+const Supervisor =
+    require('../models/Supervisor');
 
 const app_error =
     require('../utils/AppError');
@@ -38,10 +40,6 @@ const register = AsyncWrapper(
         } = req.body;
 
 
-        // =========================================
-        // Validate required fields
-        // =========================================
-
         if (
             !academy_name ||
             !manager_phone ||
@@ -62,10 +60,6 @@ const register = AsyncWrapper(
             return next(error);
         }
 
-
-        // =========================================
-        // Check academy code
-        // =========================================
 
         const academy_by_code =
             await Academy.findOne({
@@ -88,10 +82,6 @@ const register = AsyncWrapper(
         }
 
 
-        // =========================================
-        // Check manager phone
-        // =========================================
-
         const academy_by_phone =
             await Academy.findOne({
                 manager_phone
@@ -113,20 +103,12 @@ const register = AsyncWrapper(
         }
 
 
-        // =========================================
-        // Hash password
-        // =========================================
-
         const hashed_password =
             await bcrypt.hash(
                 password,
                 salt_round
             );
 
-
-        // =========================================
-        // Create Academy
-        // =========================================
 
         const academy =
             new Academy({
@@ -142,7 +124,8 @@ const register = AsyncWrapper(
                 password:
                     hashed_password,
 
-                is_active: false
+                is_active:
+                    false
 
             });
 
@@ -150,34 +133,23 @@ const register = AsyncWrapper(
         await academy.save();
 
 
-        // =========================================
-        // Token
-        // =========================================
-
-        const payload = {
-
-            id:
-                academy._id,
-
-            manager_name:
-                academy.manager_name,
-
-            manager_phone:
-                academy.manager_phone,
-
-            role:
-                'academy_admin'
-
-        };
-
-
         const token =
-            await gen_token(payload);
+            await gen_token({
 
+                id:
+                    academy._id,
 
-        // =========================================
-        // Remove password
-        // =========================================
+                manager_name:
+                    academy.manager_name,
+
+                manager_phone:
+                    academy.manager_phone,
+
+                role:
+                    'academy_admin'
+
+            });
+
 
         academy.password =
             undefined;
@@ -217,10 +189,6 @@ const login = AsyncWrapper(
         } = req.body;
 
 
-        // =========================================
-        // Validate
-        // =========================================
-
         if (
             !manager_phone ||
             !password
@@ -238,10 +206,6 @@ const login = AsyncWrapper(
             return next(error);
         }
 
-
-        // =========================================
-        // Find Academy
-        // =========================================
 
         const academy =
             await Academy.findOne({
@@ -263,10 +227,6 @@ const login = AsyncWrapper(
             return next(error);
         }
 
-
-        // =========================================
-        // Check password
-        // =========================================
 
         const matched_password =
             await bcrypt.compare(
@@ -290,10 +250,6 @@ const login = AsyncWrapper(
         }
 
 
-        // =========================================
-        // Check Academy active
-        // =========================================
-
         if (!academy.is_active) {
 
             const error =
@@ -308,10 +264,6 @@ const login = AsyncWrapper(
             return next(error);
         }
 
-
-        // =========================================
-        // Token
-        // =========================================
 
         const token =
             await gen_token({
@@ -351,7 +303,6 @@ const login = AsyncWrapper(
 
 // =====================================================
 // Get Academy Profile
-// Academy Admin
 // =====================================================
 
 const getMyAcademy = AsyncWrapper(
@@ -403,7 +354,6 @@ const getMyAcademy = AsyncWrapper(
 
 // =====================================================
 // Update Academy
-// Academy Admin
 // =====================================================
 
 const updateAcademy = AsyncWrapper(
@@ -441,10 +391,6 @@ const updateAcademy = AsyncWrapper(
             return next(error);
         }
 
-
-        // =========================================
-        // Manager phone
-        // =========================================
 
         if (
             manager_phone &&
@@ -484,10 +430,6 @@ const updateAcademy = AsyncWrapper(
                 manager_phone;
         }
 
-
-        // =========================================
-        // Name
-        // =========================================
 
         if (academy_name) {
 
@@ -535,7 +477,6 @@ const updateAcademy = AsyncWrapper(
 
 // =====================================================
 // Change Academy Password
-// Academy Admin
 // =====================================================
 
 const changePassword = AsyncWrapper(
@@ -591,10 +532,6 @@ const changePassword = AsyncWrapper(
         }
 
 
-        // =========================================
-        // Check old password
-        // =========================================
-
         const matched_password =
             await bcrypt.compare(
                 old_password,
@@ -616,10 +553,6 @@ const changePassword = AsyncWrapper(
             return next(error);
         }
 
-
-        // =========================================
-        // Hash new password
-        // =========================================
 
         const hashed_password =
             await bcrypt.hash(
@@ -650,6 +583,174 @@ const changePassword = AsyncWrapper(
 );
 
 
+// =====================================================
+// Activate Supervisor
+// Academy Admin
+// =====================================================
+
+const patchActiveSupervisor = AsyncWrapper(
+
+    async (req, res, next) => {
+
+        const academy_id =
+            req.user.id;
+
+
+        const {
+            supervisor_id
+        } = req.body;
+
+
+        if (!supervisor_id) {
+
+            const error =
+                new app_error();
+
+            error.create(
+                'supervisor_id is required',
+                400,
+                http_status_text.FAIL
+            );
+
+            return next(error);
+        }
+
+
+        const supervisor =
+            await Supervisor.findOne({
+
+                _id:
+                    supervisor_id,
+
+                academy_id
+
+            });
+
+
+        if (!supervisor) {
+
+            const error =
+                new app_error();
+
+            error.create(
+                'supervisor not found in this academy',
+                404,
+                http_status_text.FAIL
+            );
+
+            return next(error);
+        }
+
+
+        supervisor.is_active =
+            true;
+
+
+        await supervisor.save();
+
+
+        return res.status(200).json({
+
+            status:
+                http_status_text.SUCCESS,
+
+            data: {
+
+                supervisor
+
+            }
+
+        });
+
+    }
+
+);
+
+
+// =====================================================
+// Stop Supervisor
+// Academy Admin
+// =====================================================
+
+const patchStopSupervisor = AsyncWrapper(
+
+    async (req, res, next) => {
+
+        const academy_id =
+            req.user.id;
+
+
+        const {
+            supervisor_id
+        } = req.body;
+
+
+        if (!supervisor_id) {
+
+            const error =
+                new app_error();
+
+            error.create(
+                'supervisor_id is required',
+                400,
+                http_status_text.FAIL
+            );
+
+            return next(error);
+        }
+
+
+        const supervisor =
+            await Supervisor.findOne({
+
+                _id:
+                    supervisor_id,
+
+                academy_id
+
+            });
+
+
+        if (!supervisor) {
+
+            const error =
+                new app_error();
+
+            error.create(
+                'supervisor not found in this academy',
+                404,
+                http_status_text.FAIL
+            );
+
+            return next(error);
+        }
+
+
+        supervisor.is_active =
+            false;
+
+
+        await supervisor.save();
+
+
+        return res.status(200).json({
+
+            status:
+                http_status_text.SUCCESS,
+
+            data: {
+
+                supervisor
+
+            }
+
+        });
+
+    }
+
+);
+
+
 module.exports = {
 
     register,
@@ -660,7 +761,10 @@ module.exports = {
 
     updateAcademy,
 
-    changePassword
+    changePassword,
+
+    patchActiveSupervisor,
+
+    patchStopSupervisor
 
 };
-

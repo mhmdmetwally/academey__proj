@@ -32,8 +32,8 @@ User
         │                 │                  │
      Teacher          Supervisor           Family
         │                 │                  │
-        ▼                 ▼                  │
- TeacherAssignment   SupervisorAssignment    │
+        ▼                                    │
+ TeacherAssignment        |                  │
         │                 │                  │
         └──────────── Academy ───────────────┘
                           │

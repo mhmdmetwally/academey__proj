@@ -16,7 +16,7 @@ const TeacherAssignmentSchema = new mongoose.Schema({
 
     supervisor: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'SupervisorAssignment',
+        ref: 'Supervisor',
         required: true
     },
 

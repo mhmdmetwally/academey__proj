@@ -10,8 +10,8 @@ const StudentAssignment =
 const StudentSubject =
     require('../models/StudentSubject');
 
-const SupervisorAssignment =
-    require('../models/SupervisorAssignment');
+const Supervisor =
+    require('../models/Supervisor');
 
 const app_error =
     require('../utils/AppError');
@@ -460,7 +460,7 @@ const getLessons = AsyncWrapper(
         ) {
 
             const supervisor =
-                await SupervisorAssignment.findOne({
+                await Supervisor.findOne({
 
                     supervisor:
                         req.user.id,

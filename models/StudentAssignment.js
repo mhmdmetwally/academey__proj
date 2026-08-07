@@ -1,49 +1,49 @@
 const mongoose = require('mongoose');
 
-const StudentAssignmentSchema = new mongoose.Schema(
-    {
-        // الطالب الأصلي
-        student: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'Student',
-            required: true
-        },
+const StudentAssignmentSchema = new mongoose.Schema({
 
-        // الأكاديمية التي يدرس فيها الطالب
-        academy_id: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'Academy',
-            required: true
-        },
-
-        // الـ Family المسؤولة عن الطالب
-        family: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'User',
-            required: true
-        },
-
-        // الـ Supervisor المسؤول عن الطالب داخل الأكاديمية
-        supervisor: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'User',
-            required: true
-        },
-
-        is_active: {
-            type: Boolean,
-            default: true
-        },
-
-        joined_at: {
-            type: Date,
-            default: Date.now
-        }
+    // الطالب الأصلي
+    student: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Student',
+        required: true
     },
-    {
-        timestamps: true
+
+    // الأكاديمية التي يدرس فيها الطالب
+    academy_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Academy',
+        required: true
+    },
+
+    // الـ Family المسؤولة عن الطالب
+    family: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
+    },
+
+    // الـ Supervisor المسؤول عن الطالب
+    // داخل أكاديمية معينة
+    supervisor: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Supervisor',
+        required: true
+    },
+
+    is_active: {
+        type: Boolean,
+        default: true
+    },
+
+    joined_at: {
+        type: Date,
+        default: Date.now
     }
-);
+
+}, {
+    timestamps: true
+});
 
 
 // نفس الطالب لا يتكرر في نفس الأكاديمية
