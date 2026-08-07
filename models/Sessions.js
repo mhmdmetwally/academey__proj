@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const SessionSchema = new mongoose.Schema({
 
-    academy: {
+    academy_id: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Academy',
         required: true

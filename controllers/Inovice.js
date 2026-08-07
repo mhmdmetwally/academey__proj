@@ -4,6 +4,9 @@ const AsyncWrapper =
 const Invoice =
     require('../models/Invoice');
 
+const Lesson =
+    require('../models/Lesson');
+
 const StudentSubject =
     require('../models/StudentSubject');
 
@@ -24,7 +27,6 @@ const {
 // =====================================================
 
 const createInvoice = AsyncWrapper(
-
     async (req, res, next) => {
 
         const academy_id =
@@ -58,31 +60,55 @@ const createInvoice = AsyncWrapper(
         }
 
 
+        // =================================================
+        // Validate billing month
+        // =================================================
+
+        if (
+            !/^\d{4}-(0[1-9]|1[0-2])$/
+                .test(billing_month)
+        ) {
+
+            const error =
+                new app_error();
+
+            error.create(
+                'billing_month must be YYYY-MM',
+                400,
+                http_status_text.FAIL
+            );
+
+            return next(error);
+        }
+
+
         const invoiceItems = [];
 
         let totalAmount = 0;
 
 
+        // =================================================
+        // Process Items
+        // =================================================
+
         for (const item of items) {
 
             const {
                 student_assignment,
-                student_subject,
-                lessons_count
+                student_subject
             } = item;
 
 
             if (
                 !student_assignment ||
-                !student_subject ||
-                lessons_count === undefined
+                !student_subject
             ) {
 
                 const error =
                     new app_error();
 
                 error.create(
-                    'invalid invoice item',
+                    'student_assignment and student_subject are required',
                     400,
                     http_status_text.FAIL
                 );
@@ -91,9 +117,9 @@ const createInvoice = AsyncWrapper(
             }
 
 
-            // =========================================
+            // =============================================
             // Student Access
-            // =========================================
+            // =============================================
 
             const studentAssignment =
                 await getStudentAssignmentForUser(
@@ -117,9 +143,9 @@ const createInvoice = AsyncWrapper(
             }
 
 
-            // =========================================
+            // =============================================
             // Family Check
-            // =========================================
+            // =============================================
 
             if (
                 String(studentAssignment.family)
@@ -140,9 +166,9 @@ const createInvoice = AsyncWrapper(
             }
 
 
-            // =========================================
+            // =============================================
             // Student Subject
-            // =========================================
+            // =============================================
 
             const studentSubject =
                 await StudentSubject.findOne({
@@ -180,10 +206,6 @@ const createInvoice = AsyncWrapper(
                 );
 
 
-            const count =
-                Number(lessons_count);
-
-
             if (
                 Number.isNaN(price) ||
                 price < 0
@@ -202,16 +224,63 @@ const createInvoice = AsyncWrapper(
             }
 
 
-            if (
-                !Number.isInteger(count) ||
-                count < 0
-            ) {
+            // =============================================
+            // Month Range
+            // =============================================
+
+            const startDate =
+                new Date(
+                    `${billing_month}-01T00:00:00.000Z`
+                );
+
+
+            const endDate =
+                new Date(startDate);
+
+            endDate.setUTCMonth(
+                endDate.getUTCMonth() + 1
+            );
+
+
+            // =============================================
+            // Find Completed Lessons
+            // =============================================
+
+            const lessons =
+                await Lesson.find({
+
+                    academy_id,
+
+                    student_assignment:
+                        student_assignment,
+
+                    student:
+                        studentAssignment.student,
+
+                    student_subject:
+                        student_subject,
+
+                    status:
+                        'completed',
+
+                    lesson_date: {
+                        $gte: startDate,
+                        $lt: endDate
+                    }
+
+                })
+                .sort({
+                    lesson_date: 1
+                });
+
+
+            if (!lessons.length) {
 
                 const error =
                     new app_error();
 
                 error.create(
-                    'lessons_count must be a non-negative integer',
+                    `no completed lessons found for ${billing_month}`,
                     400,
                     http_status_text.FAIL
                 );
@@ -220,8 +289,57 @@ const createInvoice = AsyncWrapper(
             }
 
 
+            // =============================================
+            // Check Already Invoiced Lessons
+            // =============================================
+
+            const lessonIds =
+                lessons.map(
+                    lesson => lesson._id
+                );
+
+
+            const previousInvoice =
+                await Invoice.findOne({
+
+                    academy_id,
+
+                    'items.lessons': {
+                        $in: lessonIds
+                    },
+
+                    status: {
+                        $ne: 'cancelled'
+                    }
+
+                });
+
+
+            if (previousInvoice) {
+
+                const error =
+                    new app_error();
+
+                error.create(
+                    'some lessons are already included in another invoice',
+                    409,
+                    http_status_text.FAIL
+                );
+
+                return next(error);
+            }
+
+
+            // =============================================
+            // Calculate
+            // =============================================
+
+            const lessonsCount =
+                lessons.length;
+
+
             const itemTotal =
-                count * price;
+                lessonsCount * price;
 
 
             invoiceItems.push({
@@ -232,8 +350,11 @@ const createInvoice = AsyncWrapper(
                 student_subject:
                     student_subject,
 
+                lessons:
+                    lessonIds,
+
                 lessons_count:
-                    count,
+                    lessonsCount,
 
                 price_per_lesson:
                     price,
@@ -248,6 +369,10 @@ const createInvoice = AsyncWrapper(
                 itemTotal;
         }
 
+
+        // =================================================
+        // Create Invoice
+        // =================================================
 
         const invoice =
             await Invoice.create({
@@ -300,7 +425,6 @@ const createInvoice = AsyncWrapper(
 // =====================================================
 
 const getInvoices = AsyncWrapper(
-
     async (req, res, next) => {
 
         const academy_id =
@@ -352,6 +476,10 @@ const getInvoices = AsyncWrapper(
                     'items.student_subject'
                 )
 
+                .populate(
+                    'items.lessons'
+                )
+
                 .sort({
                     invoice_date: -1
                 });
@@ -377,7 +505,6 @@ const getInvoices = AsyncWrapper(
 // =====================================================
 
 const getSingleInvoice = AsyncWrapper(
-
     async (req, res, next) => {
 
         const academy_id =
@@ -405,6 +532,10 @@ const getSingleInvoice = AsyncWrapper(
 
             .populate(
                 'items.student_subject'
+            )
+
+            .populate(
+                'items.lessons'
             );
 
 
@@ -443,7 +574,6 @@ const getSingleInvoice = AsyncWrapper(
 // =====================================================
 
 const cancelInvoice = AsyncWrapper(
-
     async (req, res, next) => {
 
         const academy_id =
