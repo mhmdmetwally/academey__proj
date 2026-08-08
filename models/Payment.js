@@ -15,7 +15,9 @@ const PaymentSchema = new mongoose.Schema(
         },
 
         /*
-        null when payment is an advance
+        Direct invoice payment.
+
+        null when payment is an advance.
         */
 
         invoice: {
@@ -92,23 +94,41 @@ const PaymentSchema = new mongoose.Schema(
             default: 'completed'
         }
     },
+
     {
         timestamps: true
     }
 );
 
 
+// =====================================================
+// Indexes
+// =====================================================
+
 PaymentSchema.index({
     academy_id: 1,
     family: 1
 });
 
+PaymentSchema.index({
+    academy_id: 1,
+    invoice: 1
+});
 
 PaymentSchema.index({
     academy_id: 1,
     payment_date: 1
 });
 
+PaymentSchema.index({
+    academy_id: 1,
+    family: 1,
+    payment_date: 1
+});
+
 
 module.exports =
-    mongoose.model('Payment', PaymentSchema);
+    mongoose.model(
+        'Payment',
+        PaymentSchema
+    );

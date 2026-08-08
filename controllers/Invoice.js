@@ -27,10 +27,12 @@ const {
 // =====================================================
 
 const createInvoice = AsyncWrapper(
+
     async (req, res, next) => {
 
         const academy_id =
             getAcademyId(req);
+
 
         const {
             family,
@@ -39,6 +41,10 @@ const createInvoice = AsyncWrapper(
             notes
         } = req.body;
 
+
+        // =============================================
+        // Basic Validation
+        // =============================================
 
         if (
             !family ||
@@ -60,9 +66,9 @@ const createInvoice = AsyncWrapper(
         }
 
 
-        // =================================================
-        // Validate billing month
-        // =================================================
+        // =============================================
+        // Validate Billing Month
+        // =============================================
 
         if (
             !/^\d{4}-(0[1-9]|1[0-2])$/
@@ -87,9 +93,9 @@ const createInvoice = AsyncWrapper(
         let totalAmount = 0;
 
 
-        // =================================================
-        // Process Items
-        // =================================================
+        // =============================================
+        // Process Invoice Items
+        // =============================================
 
         for (const item of items) {
 
@@ -117,9 +123,9 @@ const createInvoice = AsyncWrapper(
             }
 
 
-            // =============================================
+            // =========================================
             // Student Access
-            // =============================================
+            // =========================================
 
             const studentAssignment =
                 await getStudentAssignmentForUser(
@@ -143,9 +149,9 @@ const createInvoice = AsyncWrapper(
             }
 
 
-            // =============================================
+            // =========================================
             // Family Check
-            // =============================================
+            // =========================================
 
             if (
                 String(studentAssignment.family)
@@ -166,9 +172,9 @@ const createInvoice = AsyncWrapper(
             }
 
 
-            // =============================================
+            // =========================================
             // Student Subject
-            // =============================================
+            // =========================================
 
             const studentSubject =
                 await StudentSubject.findOne({
@@ -200,6 +206,10 @@ const createInvoice = AsyncWrapper(
             }
 
 
+            // =========================================
+            // Price
+            // =========================================
+
             const price =
                 Number(
                     studentSubject.price_per_lesson
@@ -224,9 +234,9 @@ const createInvoice = AsyncWrapper(
             }
 
 
-            // =============================================
-            // Month Range
-            // =============================================
+            // =========================================
+            // Billing Month Range
+            // =========================================
 
             const startDate =
                 new Date(
@@ -237,14 +247,15 @@ const createInvoice = AsyncWrapper(
             const endDate =
                 new Date(startDate);
 
+
             endDate.setUTCMonth(
                 endDate.getUTCMonth() + 1
             );
 
 
-            // =============================================
-            // Find Completed Lessons
-            // =============================================
+            // =========================================
+            // Get Completed Lessons
+            // =========================================
 
             const lessons =
                 await Lesson.find({
@@ -289,15 +300,19 @@ const createInvoice = AsyncWrapper(
             }
 
 
-            // =============================================
-            // Check Already Invoiced Lessons
-            // =============================================
+            // =========================================
+            // Get Lesson IDs
+            // =========================================
 
             const lessonIds =
                 lessons.map(
                     lesson => lesson._id
                 );
 
+
+            // =========================================
+            // Check Already Invoiced Lessons
+            // =========================================
 
             const previousInvoice =
                 await Invoice.findOne({
@@ -330,9 +345,9 @@ const createInvoice = AsyncWrapper(
             }
 
 
-            // =============================================
+            // =========================================
             // Calculate
-            // =============================================
+            // =========================================
 
             const lessonsCount =
                 lessons.length;
@@ -367,12 +382,13 @@ const createInvoice = AsyncWrapper(
 
             totalAmount +=
                 itemTotal;
+
         }
 
 
-        // =================================================
+        // =============================================
         // Create Invoice
-        // =================================================
+        // =============================================
 
         const invoice =
             await Invoice.create({
@@ -425,6 +441,7 @@ const createInvoice = AsyncWrapper(
 // =====================================================
 
 const getInvoices = AsyncWrapper(
+
     async (req, res, next) => {
 
         const academy_id =
@@ -505,6 +522,7 @@ const getInvoices = AsyncWrapper(
 // =====================================================
 
 const getSingleInvoice = AsyncWrapper(
+
     async (req, res, next) => {
 
         const academy_id =
@@ -574,6 +592,7 @@ const getSingleInvoice = AsyncWrapper(
 // =====================================================
 
 const cancelInvoice = AsyncWrapper(
+
     async (req, res, next) => {
 
         const academy_id =
@@ -605,6 +624,10 @@ const cancelInvoice = AsyncWrapper(
             return next(error);
         }
 
+
+        // =============================================
+        // Cannot Cancel Paid Invoice
+        // =============================================
 
         if (
             invoice.paid_amount > 0

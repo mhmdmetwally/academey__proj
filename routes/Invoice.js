@@ -1,5 +1,4 @@
-const express =
-    require('express');
+const express = require('express');
 
 const router =
     express.Router();
@@ -17,11 +16,9 @@ const verify_token =
     require('../middleware/VerifyToken');
 
 
-/*
-=====================================================
-Create Invoice
-=====================================================
-*/
+// =====================================================
+// Create Invoice
+// =====================================================
 
 router.route('/')
     .post(
@@ -38,11 +35,9 @@ router.route('/')
     );
 
 
-/*
-=====================================================
-Get Invoices
-=====================================================
-*/
+// =====================================================
+// Get Invoices
+// =====================================================
 
 router.route('/')
     .get(
@@ -59,49 +54,41 @@ router.route('/')
     );
 
 
-/*
-=====================================================
-Get Single Invoice
-=====================================================
-*/
+// =====================================================
+// Get Single Invoice
+// =====================================================
 
-router.route(
-    '/:invoice_id'
-)
-.get(
+router.route('/:invoice_id')
+    .get(
 
-    verify_token,
+        verify_token,
 
-    allowed_tool(
-        user_role.academy_admin,
-        user_role.supervisor
-    ),
+        allowed_tool(
+            user_role.academy_admin,
+            user_role.supervisor
+        ),
 
-    invoice_controller.getSingleInvoice
+        invoice_controller.getSingleInvoice
 
-);
+    );
 
 
-/*
-=====================================================
-Cancel Invoice
-=====================================================
-*/
+// =====================================================
+// Cancel Invoice
+// =====================================================
 
-router.route(
-    '/:invoice_id'
-)
-.delete(
+router.route('/:invoice_id')
+    .delete(
 
-    verify_token,
+        verify_token,
 
-    allowed_tool(
-        user_role.academy_admin
-    ),
+        allowed_tool(
+            user_role.academy_admin
+        ),
 
-    invoice_controller.cancelInvoice
+        invoice_controller.cancelInvoice
 
-);
+    );
 
 
 module.exports =

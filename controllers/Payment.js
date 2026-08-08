@@ -1,3 +1,5 @@
+const mongoose = require('mongoose');
+
 const AsyncWrapper =
     require('../middleware/AsyncWrapper');
 
@@ -22,92 +24,85 @@ const {
 
 
 // =====================================================
-// Update Invoice Payment
+// Helper: Create Error
 // =====================================================
 
-const updateInvoicePayment =
-    async (invoice_id) => {
+const createError = (
+    message,
+    statusCode
+) => {
 
-        const invoice =
-            await Invoice.findById(
-                invoice_id
-            );
+    const error =
+        new app_error();
 
+    error.create(
+        message,
+        statusCode,
+        http_status_text.FAIL
+    );
 
-        if (!invoice) {
-            return;
-        }
-
-
-        const allocations =
-            await PaymentAllocation.find({
-
-                invoice:
-                    invoice._id
-
-            });
+    return error;
+};
 
 
-        let paidAmount = 0;
+// =====================================================
+// Helper: Update Invoice Payment Status
+// =====================================================
+
+const updateInvoiceStatus = (invoice) => {
+
+    if (
+        invoice.status === 'cancelled'
+    ) {
+        return;
+    }
 
 
-        for (
-            const allocation
-            of allocations
-        ) {
-
-            paidAmount +=
-                allocation.amount;
-
-        }
-
-
-        invoice.paid_amount =
-            paidAmount;
+    // Prevent floating point problems
+    invoice.paid_amount =
+        Math.max(
+            0,
+            Number(
+                invoice.paid_amount.toFixed(2)
+            )
+        );
 
 
-        invoice.remaining_amount =
-            Math.max(
-
-                invoice.total_amount -
-                paidAmount,
-
-                0
-
-            );
-
-
-        if (
-            invoice.status !==
-            'cancelled'
-        ) {
-
-            if (
-                invoice.remaining_amount === 0
-            ) {
-
-                invoice.status =
-                    'paid';
-
-            } else if (
-                invoice.paid_amount > 0
-            ) {
-
-                invoice.status =
-                    'partially_paid';
-
-            } else {
-
-                invoice.status =
-                    'unpaid';
-
-            }
-
-        }
+    invoice.remaining_amount =
+        Math.max(
+            0,
+            Number(
+                (
+                    invoice.total_amount -
+                    invoice.paid_amount
+                ).toFixed(2)
+            )
+        );
 
 
-        await invoice.save();
-    };
+    if (
+        invoice.remaining_amount === 0
+    ) {
+
+        invoice.status =
+            'paid';
+
+    }
+    else if (
+        invoice.paid_amount > 0
+    ) {
+
+        invoice.status =
+            'partially_paid';
+
+    }
+    else {
+
+        invoice.status =
+            'unpaid';
+
+    }
+};
 
 
 // =====================================================
@@ -115,98 +110,351 @@ const updateInvoicePayment =
 // =====================================================
 
 const createPayment = AsyncWrapper(
-
     async (req, res, next) => {
 
-        const academy_id =
-            getAcademyId(req);
+        const session =
+            await mongoose.startSession();
 
 
-        const {
-            family,
-            invoice,
-            amount,
-            method,
-            payment_date,
-            reference,
-            notes
-        } = req.body;
+        try {
+
+            await session.withTransaction(
+                async () => {
+
+                    const academy_id =
+                        getAcademyId(req);
 
 
-        const paymentAmount =
-            Number(amount);
+                    const {
+                        family,
+                        invoice,
+                        amount,
+                        type,
+                        method,
+                        payment_date,
+                        reference,
+                        notes
+                    } = req.body;
 
 
-        if (
-            !family ||
-            amount === undefined
-        ) {
+                    // =============================================
+                    // Basic Validation
+                    // =============================================
 
-            const error =
-                new app_error();
+                    if (!family) {
 
-            error.create(
-                'family and amount are required',
-                400,
-                http_status_text.FAIL
+                        throw createError(
+                            'family is required',
+                            400
+                        );
+
+                    }
+
+
+                    if (
+                        amount === undefined ||
+                        amount === null
+                    ) {
+
+                        throw createError(
+                            'amount is required',
+                            400
+                        );
+
+                    }
+
+
+                    const paymentAmount =
+                        Number(amount);
+
+
+                    if (
+                        Number.isNaN(paymentAmount) ||
+                        paymentAmount <= 0
+                    ) {
+
+                        throw createError(
+                            'amount must be greater than 0',
+                            400
+                        );
+
+                    }
+
+
+                    if (
+                        !type
+                    ) {
+
+                        throw createError(
+                            'type is required',
+                            400
+                        );
+
+                    }
+
+
+                    if (
+                        ![
+                            'invoice_payment',
+                            'advance'
+                        ].includes(type)
+                    ) {
+
+                        throw createError(
+                            'invalid payment type',
+                            400
+                        );
+
+                    }
+
+
+                    // =============================================
+                    // Invoice Payment
+                    // =============================================
+
+                    if (
+                        type ===
+                        'invoice_payment'
+                    ) {
+
+                        if (!invoice) {
+
+                            throw createError(
+                                'invoice is required for invoice_payment',
+                                400
+                            );
+
+                        }
+
+
+                        // =========================================
+                        // Get Invoice
+                        // =========================================
+
+                        const invoiceDoc =
+                            await Invoice.findOne({
+
+                                _id:
+                                    invoice,
+
+                                academy_id,
+
+                                family
+
+                            }).session(session);
+
+
+                        if (!invoiceDoc) {
+
+                            throw createError(
+                                'invoice not found',
+                                404
+                            );
+
+                        }
+
+
+                        // =========================================
+                        // Cancelled Invoice
+                        // =========================================
+
+                        if (
+                            invoiceDoc.status ===
+                            'cancelled'
+                        ) {
+
+                            throw createError(
+                                'cannot pay a cancelled invoice',
+                                400
+                            );
+
+                        }
+
+
+                        // =========================================
+                        // Check Remaining
+                        // =========================================
+
+                        const remaining =
+                            Number(
+                                invoiceDoc.remaining_amount
+                            );
+
+
+                        if (
+                            paymentAmount >
+                            remaining
+                        ) {
+
+                            throw createError(
+                                `payment amount cannot exceed invoice remaining amount (${remaining})`,
+                                400
+                            );
+
+                        }
+
+
+                        // =========================================
+                        // Create Payment
+                        // =========================================
+
+                        const payment =
+                            new Payment({
+
+                                academy_id,
+
+                                family,
+
+                                invoice,
+
+                                amount:
+                                    paymentAmount,
+
+                                remaining_amount:
+                                    0,
+
+                                type:
+                                    'invoice_payment',
+
+                                method:
+                                    method || 'cash',
+
+                                payment_date:
+                                    payment_date ||
+                                    Date.now(),
+
+                                reference,
+
+                                notes
+
+                            });
+
+
+                        await payment.save({
+                            session
+                        });
+
+
+                        // =========================================
+                        // Create Allocation
+                        // =========================================
+
+                        const allocation =
+                            new PaymentAllocation({
+
+                                payment:
+                                    payment._id,
+
+                                invoice:
+                                    invoiceDoc._id,
+
+                                amount:
+                                    paymentAmount
+
+                            });
+
+
+                        await allocation.save({
+                            session
+                        });
+
+
+                        // =========================================
+                        // Update Invoice
+                        // =========================================
+
+                        invoiceDoc.paid_amount =
+                            Number(
+                                invoiceDoc.paid_amount
+                            ) +
+                            paymentAmount;
+
+
+                        updateInvoiceStatus(
+                            invoiceDoc
+                        );
+
+
+                        await invoiceDoc.save({
+                            session
+                        });
+
+
+                        req.paymentResult = {
+                            payment,
+                            allocation,
+                            invoice: invoiceDoc
+                        };
+
+                    }
+
+
+                    // =============================================
+                    // Advance Payment
+                    // =============================================
+
+                    else {
+
+                        if (invoice) {
+
+                            throw createError(
+                                'advance payment cannot have an invoice',
+                                400
+                            );
+
+                        }
+
+
+                        // =========================================
+                        // Create Advance Payment
+                        // =========================================
+
+                        const payment =
+                            new Payment({
+
+                                academy_id,
+
+                                family,
+
+                                invoice:
+                                    null,
+
+                                amount:
+                                    paymentAmount,
+
+                                remaining_amount:
+                                    paymentAmount,
+
+                                type:
+                                    'advance',
+
+                                method:
+                                    method || 'cash',
+
+                                payment_date:
+                                    payment_date ||
+                                    Date.now(),
+
+                                reference,
+
+                                notes
+
+                            });
+
+
+                        await payment.save({
+                            session
+                        });
+
+
+                        req.paymentResult = {
+                            payment
+                        };
+
+                    }
+
+                }
             );
-
-            return next(error);
-        }
-
-
-        if (
-            Number.isNaN(paymentAmount) ||
-            paymentAmount <= 0
-        ) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'amount must be greater than zero',
-                400,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-        }
-
-
-        // =================================================
-        // Advance Payment
-        // =================================================
-
-        if (!invoice) {
-
-            const payment =
-                await Payment.create({
-
-                    academy_id,
-
-                    family,
-
-                    invoice:
-                        null,
-
-                    amount:
-                        paymentAmount,
-
-                    remaining_amount:
-                        paymentAmount,
-
-                    type:
-                        'advance',
-
-                    method,
-
-                    payment_date,
-
-                    reference,
-
-                    notes
-
-                });
 
 
             return res.status(201).json({
@@ -214,421 +462,17 @@ const createPayment = AsyncWrapper(
                 status:
                     http_status_text.SUCCESS,
 
-                data: {
-                    payment
-                }
-
-            });
-        }
-
-
-        // =================================================
-        // Invoice Payment
-        // =================================================
-
-        const currentInvoice =
-            await Invoice.findOne({
-
-                _id:
-                    invoice,
-
-                academy_id,
-
-                family
+                data:
+                    req.paymentResult
 
             });
 
-
-        if (!currentInvoice) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'invoice not found',
-                404,
-                http_status_text.FAIL
-            );
-
-            return next(error);
         }
+        finally {
 
+            await session.endSession();
 
-        if (
-            currentInvoice.status ===
-            'cancelled'
-        ) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'cannot pay a cancelled invoice',
-                400,
-                http_status_text.FAIL
-            );
-
-            return next(error);
         }
-
-
-        if (
-            currentInvoice.remaining_amount === 0
-        ) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'invoice is already fully paid',
-                400,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-        }
-
-
-        if (
-            paymentAmount >
-            currentInvoice.remaining_amount
-        ) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                `payment amount is greater than invoice remaining amount (${currentInvoice.remaining_amount})`,
-                400,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-        }
-
-
-        const payment =
-            await Payment.create({
-
-                academy_id,
-
-                family,
-
-                invoice:
-                    currentInvoice._id,
-
-                amount:
-                    paymentAmount,
-
-                remaining_amount:
-                    0,
-
-                type:
-                    'invoice_payment',
-
-                method,
-
-                payment_date,
-
-                reference,
-
-                notes
-
-            });
-
-
-        await PaymentAllocation.create({
-
-            payment:
-                payment._id,
-
-            invoice:
-                currentInvoice._id,
-
-            amount:
-                paymentAmount
-
-        });
-
-
-        await updateInvoicePayment(
-            currentInvoice._id
-        );
-
-
-        const updatedInvoice =
-            await Invoice.findById(
-                currentInvoice._id
-            );
-
-
-        return res.status(201).json({
-
-            status:
-                http_status_text.SUCCESS,
-
-            data: {
-
-                payment,
-
-                invoice:
-                    updatedInvoice
-
-            }
-
-        });
-
-    }
-);
-
-
-// =====================================================
-// Allocate Advance Payment
-// =====================================================
-
-const allocateAdvancePayment = AsyncWrapper(
-
-    async (req, res, next) => {
-
-        const academy_id =
-            getAcademyId(req);
-
-        const payment_id =
-            req.params.payment_id;
-
-        const {
-            invoice,
-            amount
-        } = req.body;
-
-
-        const allocationAmount =
-            Number(amount);
-
-
-        if (
-            !invoice ||
-            amount === undefined
-        ) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'invoice and amount are required',
-                400,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-        }
-
-
-        if (
-            Number.isNaN(allocationAmount) ||
-            allocationAmount <= 0
-        ) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'amount must be greater than zero',
-                400,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-        }
-
-
-        // =========================================
-        // Find Advance
-        // =========================================
-
-        const payment =
-            await Payment.findOne({
-
-                _id:
-                    payment_id,
-
-                academy_id,
-
-                type:
-                    'advance',
-
-                status:
-                    'completed'
-
-            });
-
-
-        if (!payment) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'advance payment not found',
-                404,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-        }
-
-
-        // =========================================
-        // Check Remaining Advance
-        // =========================================
-
-        if (
-            allocationAmount >
-            payment.remaining_amount
-        ) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                `allocation amount is greater than remaining advance (${payment.remaining_amount})`,
-                400,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-        }
-
-
-        // =========================================
-        // Find Invoice
-        // =========================================
-
-        const currentInvoice =
-            await Invoice.findOne({
-
-                _id:
-                    invoice,
-
-                academy_id,
-
-                family:
-                    payment.family
-
-            });
-
-
-        if (!currentInvoice) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'invoice not found',
-                404,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-        }
-
-
-        if (
-            currentInvoice.status ===
-            'cancelled'
-        ) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'cannot allocate payment to cancelled invoice',
-                400,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-        }
-
-
-        if (
-            allocationAmount >
-            currentInvoice.remaining_amount
-        ) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                `allocation amount is greater than invoice remaining amount (${currentInvoice.remaining_amount})`,
-                400,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-        }
-
-
-        // =========================================
-        // Create Allocation
-        // =========================================
-
-        await PaymentAllocation.create({
-
-            payment:
-                payment._id,
-
-            invoice:
-                currentInvoice._id,
-
-            amount:
-                allocationAmount
-
-        });
-
-
-        // =========================================
-        // Update Advance
-        // =========================================
-
-        payment.remaining_amount =
-            payment.remaining_amount -
-            allocationAmount;
-
-
-        await payment.save();
-
-
-        // =========================================
-        // Update Invoice
-        // =========================================
-
-        await updateInvoicePayment(
-            currentInvoice._id
-        );
-
-
-        const updatedInvoice =
-            await Invoice.findById(
-                currentInvoice._id
-            );
-
-
-        return res.status(200).json({
-
-            status:
-                http_status_text.SUCCESS,
-
-            data: {
-
-                payment,
-
-                invoice:
-                    updatedInvoice
-
-            }
-
-        });
 
     }
 );
@@ -639,7 +483,6 @@ const allocateAdvancePayment = AsyncWrapper(
 // =====================================================
 
 const getPayments = AsyncWrapper(
-
     async (req, res, next) => {
 
         const academy_id =
@@ -647,16 +490,13 @@ const getPayments = AsyncWrapper(
 
 
         const filter = {
-
-            academy_id,
-
-            status:
-                'completed'
-
+            academy_id
         };
 
 
-        if (req.query.family) {
+        if (
+            req.query.family
+        ) {
 
             filter.family =
                 req.query.family;
@@ -664,7 +504,9 @@ const getPayments = AsyncWrapper(
         }
 
 
-        if (req.query.invoice) {
+        if (
+            req.query.invoice
+        ) {
 
             filter.invoice =
                 req.query.invoice;
@@ -672,10 +514,22 @@ const getPayments = AsyncWrapper(
         }
 
 
-        if (req.query.type) {
+        if (
+            req.query.type
+        ) {
 
             filter.type =
                 req.query.type;
+
+        }
+
+
+        if (
+            req.query.status
+        ) {
+
+            filter.status =
+                req.query.status;
 
         }
 
@@ -716,59 +570,622 @@ const getPayments = AsyncWrapper(
 // Get Single Payment
 // =====================================================
 
-const getSinglePayment =
-    AsyncWrapper(
+const getSinglePayment = AsyncWrapper(
+    async (req, res, next) => {
 
-        async (req, res, next) => {
-
-            const academy_id =
-                getAcademyId(req);
+        const academy_id =
+            getAcademyId(req);
 
 
-            const payment =
-                await Payment.findOne({
+        const payment =
+            await Payment.findOne({
 
-                    _id:
-                        req.params.payment_id,
+                _id:
+                    req.params.payment_id,
 
-                    academy_id
+                academy_id
 
-                })
+            })
 
-                .populate(
-                    'family',
-                    'name phone'
-                )
+            .populate(
+                'family',
+                'name phone'
+            )
 
-                .populate(
-                    'invoice'
-                );
+            .populate(
+                'invoice'
+            );
 
 
-            if (!payment) {
+        if (!payment) {
 
-                const error =
-                    new app_error();
-
-                error.create(
+            const error =
+                createError(
                     'payment not found',
-                    404,
-                    http_status_text.FAIL
+                    404
                 );
 
-                return next(error);
+            return next(error);
+
+        }
+
+
+        const allocations =
+            await PaymentAllocation.find({
+
+                payment:
+                    payment._id
+
+            })
+
+            .populate(
+                'invoice'
+            );
+
+
+        return res.status(200).json({
+
+            status:
+                http_status_text.SUCCESS,
+
+            data: {
+
+                payment,
+
+                allocations
+
             }
 
+        });
 
-            const allocations =
-                await PaymentAllocation.find({
+    }
+);
 
-                    payment:
-                        payment._id
 
-                }).populate(
-                    'invoice'
+// =====================================================
+// Get Invoice Payments
+// =====================================================
+
+const getInvoicePayments = AsyncWrapper(
+    async (req, res, next) => {
+
+        const academy_id =
+            getAcademyId(req);
+
+
+        const invoice =
+            await Invoice.findOne({
+
+                _id:
+                    req.params.invoice_id,
+
+                academy_id
+
+            });
+
+
+        if (!invoice) {
+
+            const error =
+                createError(
+                    'invoice not found',
+                    404
                 );
+
+            return next(error);
+
+        }
+
+
+        const allocations =
+            await PaymentAllocation.find({
+
+                invoice:
+                    invoice._id
+
+            })
+
+            .populate({
+                path:
+                    'payment',
+
+                populate: {
+                    path:
+                        'family',
+
+                    select:
+                        'name phone'
+                }
+            })
+
+            .sort({
+                createdAt: -1
+            });
+
+
+        return res.status(200).json({
+
+            status:
+                http_status_text.SUCCESS,
+
+            data: {
+
+                invoice,
+
+                allocations
+
+            }
+
+        });
+
+    }
+);
+
+
+// =====================================================
+// Allocate Advance Payment
+// =====================================================
+
+const allocateAdvancePayment =
+    AsyncWrapper(
+        async (req, res, next) => {
+
+            const session =
+                await mongoose.startSession();
+
+
+            try {
+
+                await session.withTransaction(
+                    async () => {
+
+                        const academy_id =
+                            getAcademyId(req);
+
+
+                        const {
+                            invoice,
+                            amount
+                        } = req.body;
+
+
+                        if (!invoice) {
+
+                            throw createError(
+                                'invoice is required',
+                                400
+                            );
+
+                        }
+
+
+                        if (
+                            amount === undefined ||
+                            amount === null
+                        ) {
+
+                            throw createError(
+                                'amount is required',
+                                400
+                            );
+
+                        }
+
+
+                        const allocationAmount =
+                            Number(amount);
+
+
+                        if (
+                            Number.isNaN(
+                                allocationAmount
+                            ) ||
+                            allocationAmount <= 0
+                        ) {
+
+                            throw createError(
+                                'amount must be greater than 0',
+                                400
+                            );
+
+                        }
+
+
+                        // =========================================
+                        // Get Payment
+                        // =========================================
+
+                        const payment =
+                            await Payment.findOne({
+
+                                _id:
+                                    req.params.payment_id,
+
+                                academy_id,
+
+                                type:
+                                    'advance',
+
+                                status:
+                                    'completed'
+
+                            }).session(session);
+
+
+                        if (!payment) {
+
+                            throw createError(
+                                'advance payment not found',
+                                404
+                            );
+
+                        }
+
+
+                        // =========================================
+                        // Check Payment Balance
+                        // =========================================
+
+                        if (
+                            allocationAmount >
+                            payment.remaining_amount
+                        ) {
+
+                            throw createError(
+                                'allocation amount exceeds payment remaining amount',
+                                400
+                            );
+
+                        }
+
+
+                        // =========================================
+                        // Get Invoice
+                        // =========================================
+
+                        const invoiceDoc =
+                            await Invoice.findOne({
+
+                                _id:
+                                    invoice,
+
+                                academy_id,
+
+                                family:
+                                    payment.family
+
+                            }).session(session);
+
+
+                        if (!invoiceDoc) {
+
+                            throw createError(
+                                'invoice not found or does not belong to this family',
+                                404
+                            );
+
+                        }
+
+
+                        if (
+                            invoiceDoc.status ===
+                            'cancelled'
+                        ) {
+
+                            throw createError(
+                                'cannot allocate payment to a cancelled invoice',
+                                400
+                            );
+
+                        }
+
+
+                        // =========================================
+                        // Check Invoice Balance
+                        // =========================================
+
+                        if (
+                            allocationAmount >
+                            invoiceDoc.remaining_amount
+                        ) {
+
+                            throw createError(
+                                'allocation amount exceeds invoice remaining amount',
+                                400
+                            );
+
+                        }
+
+
+                        // =========================================
+                        // Existing Allocation
+                        // =========================================
+
+                        let allocation =
+                            await PaymentAllocation.findOne({
+
+                                payment:
+                                    payment._id,
+
+                                invoice:
+                                    invoiceDoc._id
+
+                            }).session(session);
+
+
+                        if (allocation) {
+
+                            allocation.amount =
+                                Number(
+                                    allocation.amount
+                                ) +
+                                allocationAmount;
+
+
+                        }
+                        else {
+
+                            allocation =
+                                new PaymentAllocation({
+
+                                    payment:
+                                        payment._id,
+
+                                    invoice:
+                                        invoiceDoc._id,
+
+                                    amount:
+                                        allocationAmount
+
+                                });
+
+                        }
+
+
+                        await allocation.save({
+                            session
+                        });
+
+
+                        // =========================================
+                        // Update Payment
+                        // =========================================
+
+                        payment.remaining_amount =
+                            Number(
+                                (
+                                    payment.remaining_amount -
+                                    allocationAmount
+                                ).toFixed(2)
+                            );
+
+
+                        await payment.save({
+                            session
+                        });
+
+
+                        // =========================================
+                        // Update Invoice
+                        // =========================================
+
+                        invoiceDoc.paid_amount =
+                            Number(
+                                invoiceDoc.paid_amount
+                            ) +
+                            allocationAmount;
+
+
+                        updateInvoiceStatus(
+                            invoiceDoc
+                        );
+
+
+                        await invoiceDoc.save({
+                            session
+                        });
+
+
+                        req.paymentResult = {
+
+                            payment,
+
+                            allocation,
+
+                            invoice:
+                                invoiceDoc
+
+                        };
+
+                    }
+                );
+
+
+                return res.status(200).json({
+
+                    status:
+                        http_status_text.SUCCESS,
+
+                    data:
+                        req.paymentResult
+
+                });
+
+            }
+            finally {
+
+                await session.endSession();
+
+            }
+
+        }
+    );
+
+
+// =====================================================
+// Cancel Payment
+// =====================================================
+
+const cancelPayment = AsyncWrapper(
+    async (req, res, next) => {
+
+        const session =
+            await mongoose.startSession();
+
+
+        try {
+
+            await session.withTransaction(
+                async () => {
+
+                    const academy_id =
+                        getAcademyId(req);
+
+
+                    const payment =
+                        await Payment.findOne({
+
+                            _id:
+                                req.params.payment_id,
+
+                            academy_id
+
+                        }).session(session);
+
+
+                    if (!payment) {
+
+                        throw createError(
+                            'payment not found',
+                            404
+                        );
+
+                    }
+
+
+                    if (
+                        payment.status ===
+                        'cancelled'
+                    ) {
+
+                        throw createError(
+                            'payment is already cancelled',
+                            400
+                        );
+
+                    }
+
+
+                    // =========================================
+                    // Get Allocations
+                    // =========================================
+
+                    const allocations =
+                        await PaymentAllocation.find({
+
+                            payment:
+                                payment._id
+
+                        }).session(session);
+
+
+                    // =========================================
+                    // Reverse Invoice Payments
+                    // =========================================
+
+                    for (
+                        const allocation
+                        of allocations
+                    ) {
+
+                        const invoice =
+                            await Invoice.findOne({
+
+                                _id:
+                                    allocation.invoice,
+
+                                academy_id
+
+                            }).session(session);
+
+
+                        if (!invoice) {
+
+                            throw createError(
+                                'invoice related to payment was not found',
+                                404
+                            );
+
+                        }
+
+
+                        invoice.paid_amount =
+                            Math.max(
+                                0,
+                                Number(
+                                    invoice.paid_amount
+                                ) -
+                                Number(
+                                    allocation.amount
+                                )
+                            );
+
+
+                        updateInvoiceStatus(
+                            invoice
+                        );
+
+
+                        await invoice.save({
+                            session
+                        });
+
+                    }
+
+
+                    // =========================================
+                    // Delete Allocations
+                    // =========================================
+
+                    await PaymentAllocation.deleteMany({
+
+                        payment:
+                            payment._id
+
+                    }).session(session);
+
+
+                    // =========================================
+                    // Cancel Payment
+                    // =========================================
+
+                    payment.status =
+                        'cancelled';
+
+
+                    /*
+                    The full amount becomes unallocated
+                    after cancellation.
+
+                    We keep the original amount for
+                    historical records.
+                    */
+
+                    payment.remaining_amount =
+                        0;
+
+
+                    await payment.save({
+                        session
+                    });
+
+
+                    req.paymentResult = {
+                        payment
+                    };
+
+                }
+            );
 
 
             return res.status(200).json({
@@ -776,29 +1193,34 @@ const getSinglePayment =
                 status:
                     http_status_text.SUCCESS,
 
-                data: {
-
-                    payment,
-
-                    allocations
-
-                }
+                data:
+                    req.paymentResult
 
             });
 
         }
+        finally {
 
-    );
+            await session.endSession();
+
+        }
+
+    }
+);
 
 
 module.exports = {
 
     createPayment,
 
-    allocateAdvancePayment,
-
     getPayments,
 
-    getSinglePayment
+    getSinglePayment,
+
+    getInvoicePayments,
+
+    allocateAdvancePayment,
+
+    cancelPayment
 
 };
