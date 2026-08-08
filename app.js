@@ -39,6 +39,12 @@ const invoice_routes =
 const payment_routes =
     require('./routes/Payment');
 
+const expense_routes =
+    require('./routes/Expense');
+
+const financial_report_routes =
+    require('./routes/FinancialReport');
+
 const app = express();
 
 const url =
@@ -171,6 +177,16 @@ app.use(
 app.use(
     '/payment',
     payment_routes
+);
+
+app.use(
+    '/expense',
+    expense_routes
+);
+
+app.use(
+    '/financial',
+    financial_report_routes
 );
 
 // =====================================================
