@@ -20,6 +20,12 @@ const TeacherAssignmentSchema = new mongoose.Schema({
         required: true
     },
 
+    // =========================================
+    // سعر ساعة المعلم
+    //
+    // price_per_lesson
+    // = السعر لكل ساعة
+    // =========================================
     price_per_lesson: {
         type: Number,
         required: true,

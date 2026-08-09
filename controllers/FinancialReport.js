@@ -10,6 +10,9 @@ const Expense =
 const Invoice =
     require('../models/Invoice');
 
+const TeacherPayroll =
+    require('../models/TeacherPayroll');
+
 const app_error =
     require('../utils/AppError');
 
@@ -19,7 +22,6 @@ const http_status_text =
 const {
     getAcademyId
 } = require('../utils/AccessScope');
-
 
 // =====================================================
 // Helpers
@@ -38,8 +40,8 @@ function getStartOfDay(date) {
     );
 
     return result;
-}
 
+}
 
 function getEndOfDay(date) {
 
@@ -54,8 +56,22 @@ function getEndOfDay(date) {
     );
 
     return result;
+
 }
 
+// =====================================================
+// Get YYYY-MM
+// =====================================================
+
+function getBillingMonthFromDate(
+    date
+) {
+
+    return `${date.getUTCFullYear()}-${String(
+        date.getUTCMonth() + 1
+    ).padStart(2, '0')}`;
+
+}
 
 // =====================================================
 // Get Report Period
@@ -83,26 +99,21 @@ function getReportPeriod(
 
         }
 
-
         const start =
             new Date(
                 `${query.month}-01T00:00:00.000Z`
             );
 
-
         const end =
             new Date(start);
-
 
         end.setUTCMonth(
             end.getUTCMonth() + 1
         );
 
-
         end.setUTCMilliseconds(
             end.getUTCMilliseconds() - 1
         );
-
 
         return {
             start,
@@ -110,7 +121,6 @@ function getReportPeriod(
         };
 
     }
-
 
     // =============================================
     // Year
@@ -130,27 +140,22 @@ function getReportPeriod(
 
         }
 
-
         const year =
             Number(query.year);
-
 
         const start =
             new Date(
                 `${year}-01-01T00:00:00.000Z`
             );
 
-
         const end =
             new Date(
                 `${year + 1}-01-01T00:00:00.000Z`
             );
 
-
         end.setUTCMilliseconds(
             end.getUTCMilliseconds() - 1
         );
-
 
         return {
             start,
@@ -158,7 +163,6 @@ function getReportPeriod(
         };
 
     }
-
 
     // =============================================
     // Custom Range
@@ -181,7 +185,6 @@ function getReportPeriod(
 
         }
 
-
         const start =
             getStartOfDay(
                 new Date(
@@ -189,14 +192,12 @@ function getReportPeriod(
                 )
             );
 
-
         const end =
             getEndOfDay(
                 new Date(
                     `${query.to}T00:00:00.000Z`
                 )
             );
-
 
         if (
             Number.isNaN(
@@ -214,7 +215,6 @@ function getReportPeriod(
 
         }
 
-
         if (
             start > end
         ) {
@@ -226,7 +226,6 @@ function getReportPeriod(
 
         }
 
-
         return {
             start,
             end
@@ -234,14 +233,12 @@ function getReportPeriod(
 
     }
 
-
     // =============================================
     // Default = Current Month
     // =============================================
 
     const now =
         new Date();
-
 
     const start =
         new Date(
@@ -252,27 +249,23 @@ function getReportPeriod(
             )
         );
 
-
     const end =
         new Date(start);
-
 
     end.setUTCMonth(
         end.getUTCMonth() + 1
     );
 
-
     end.setUTCMilliseconds(
         end.getUTCMilliseconds() - 1
     );
-
 
     return {
         start,
         end
     };
-}
 
+}
 
 // =====================================================
 // Get Previous Period
@@ -284,24 +277,19 @@ function getPreviousPeriod(
 ) {
 
     const duration =
-        end.getTime()
-        -
+        end.getTime() -
         start.getTime();
-
 
     const previousEnd =
         new Date(
             start.getTime() - 1
         );
 
-
     const previousStart =
         new Date(
-            previousEnd.getTime()
-            -
+            previousEnd.getTime() -
             duration
         );
-
 
     return {
         start:
@@ -310,8 +298,8 @@ function getPreviousPeriod(
         end:
             previousEnd
     };
-}
 
+}
 
 // =====================================================
 // Growth Calculation
@@ -328,8 +316,6 @@ function calculateGrowth(
     previous =
         Number(previous) || 0;
 
-
-    // No previous data
     if (
         previous === 0
     ) {
@@ -343,8 +329,8 @@ function calculateGrowth(
         }
 
         return null;
-    }
 
+    }
 
     return Number(
         (
@@ -358,8 +344,8 @@ function calculateGrowth(
         *
         100
     ).toFixed(2);
-}
 
+}
 
 // =====================================================
 // Get Financial Data
@@ -424,18 +410,15 @@ async function getFinancialData(
 
         ]);
 
-
     const totalRevenue =
         paymentResult.length
             ? paymentResult[0].total
             : 0;
 
-
     const paymentCount =
         paymentResult.length
             ? paymentResult[0].count
             : 0;
-
 
     // =============================================
     // Expenses
@@ -490,18 +473,15 @@ async function getFinancialData(
 
         ]);
 
-
     const totalExpenses =
         expenseResult.length
             ? expenseResult[0].total
             : 0;
 
-
     const expenseCount =
         expenseResult.length
             ? expenseResult[0].count
             : 0;
-
 
     // =============================================
     // Expenses By Category
@@ -565,7 +545,6 @@ async function getFinancialData(
             }
 
         ]);
-
 
     // =============================================
     // Invoices
@@ -636,7 +615,6 @@ async function getFinancialData(
 
         ]);
 
-
     const invoiceData =
         invoiceResult.length
             ? invoiceResult[0]
@@ -656,15 +634,254 @@ async function getFinancialData(
 
             };
 
+    // =============================================
+    // Teacher Payroll
+    //
+    // IMPORTANT:
+    // We DO NOT use createdAt.
+    //
+    // We use billing_month.
+    // =============================================
+
+    const fromMonth =
+        getBillingMonthFromDate(
+            start
+        );
+
+    const toMonth =
+        getBillingMonthFromDate(
+            end
+        );
+
+    const payrollResult =
+        await TeacherPayroll.aggregate([
+
+            {
+                $match: {
+
+                    academy_id,
+
+                    billing_month: {
+
+                        $gte:
+                            fromMonth,
+
+                        $lte:
+                            toMonth
+
+                    }
+
+                }
+
+            },
+
+            {
+                $group: {
+
+                    _id:
+                        null,
+
+                    // =================================
+                    // إجمالي الرواتب المستحقة
+                    // بدون cancelled
+                    // =================================
+
+                    total:
+                        {
+                            $sum:
+                                {
+                                    $cond: [
+                                        {
+                                            $ne: [
+                                                '$status',
+                                                'cancelled'
+                                            ]
+                                        },
+                                        '$total_amount',
+                                        0
+                                    ]
+                                }
+                        },
+
+                    // =================================
+                    // المبلغ المدفوع فعليًا
+                    // =================================
+
+                    paid:
+                        {
+                            $sum:
+                                {
+                                    $cond: [
+                                        {
+                                            $ne: [
+                                                '$status',
+                                                'cancelled'
+                                            ]
+                                        },
+                                        '$paid_amount',
+                                        0
+                                    ]
+                                }
+                        },
+
+                    // =================================
+                    // المتبقي
+                    // =================================
+
+                    remaining:
+                        {
+                            $sum:
+                                {
+                                    $cond: [
+                                        {
+                                            $ne: [
+                                                '$status',
+                                                'cancelled'
+                                            ]
+                                        },
+                                        '$remaining_amount',
+                                        0
+                                    ]
+                                }
+                        },
+
+                    // =================================
+                    // Pending
+                    // =================================
+
+                    pending:
+                        {
+                            $sum:
+                                {
+                                    $cond: [
+                                        {
+                                            $eq: [
+                                                '$status',
+                                                'pending'
+                                            ]
+                                        },
+                                        '$total_amount',
+                                        0
+                                    ]
+                                }
+                        },
+
+                    // =================================
+                    // Partially Paid
+                    // =================================
+
+                    partially_paid:
+                        {
+                            $sum:
+                                {
+                                    $cond: [
+                                        {
+                                            $eq: [
+                                                '$status',
+                                                'partially_paid'
+                                            ]
+                                        },
+                                        '$remaining_amount',
+                                        0
+                                    ]
+                                }
+                        },
+
+                    // =================================
+                    // Paid Payrolls
+                    // =================================
+
+                    paid_payrolls:
+                        {
+                            $sum:
+                                {
+                                    $cond: [
+                                        {
+                                            $eq: [
+                                                '$status',
+                                                'paid'
+                                            ]
+                                        },
+                                        1,
+                                        0
+                                    ]
+                                }
+                        },
+
+                    // =================================
+                    // Cancelled
+                    // =================================
+
+                    cancelled:
+                        {
+                            $sum:
+                                {
+                                    $cond: [
+                                        {
+                                            $eq: [
+                                                '$status',
+                                                'cancelled'
+                                            ]
+                                        },
+                                        '$total_amount',
+                                        0
+                                    ]
+                                }
+                        },
+
+                    count:
+                        {
+                            $sum:
+                                1
+                        }
+
+                }
+
+            }
+
+        ]);
+
+    const payrollData =
+        payrollResult.length
+            ? payrollResult[0]
+            : {
+
+                total:
+                    0,
+
+                paid:
+                    0,
+
+                remaining:
+                    0,
+
+                pending:
+                    0,
+
+                partially_paid:
+                    0,
+
+                paid_payrolls:
+                    0,
+
+                cancelled:
+                    0,
+
+                count:
+                    0
+
+            };
 
     // =============================================
-    // Net Profit
+    // Net Cash Profit
+    //
+    // Revenue = actual customer payments
+    // Expenses = actual paid expenses
     // =============================================
 
     const netProfit =
         totalRevenue -
         totalExpenses;
-
 
     // =============================================
     // Profit Margin
@@ -672,7 +889,6 @@ async function getFinancialData(
 
     let profitMargin =
         0;
-
 
     if (
         totalRevenue > 0
@@ -687,7 +903,6 @@ async function getFinancialData(
             100;
 
     }
-
 
     return {
 
@@ -735,6 +950,46 @@ async function getFinancialData(
                 invoiceData.remaining
             ),
 
+        teacher_payroll: {
+
+            total:
+                Number(
+                    payrollData.total
+                ),
+
+            paid:
+                Number(
+                    payrollData.paid
+                ),
+
+            remaining:
+                Number(
+                    payrollData.remaining
+                ),
+
+            pending:
+                Number(
+                    payrollData.pending
+                ),
+
+            partially_paid:
+                Number(
+                    payrollData.partially_paid
+                ),
+
+            paid_payrolls:
+                payrollData.paid_payrolls,
+
+            cancelled:
+                Number(
+                    payrollData.cancelled
+                ),
+
+            count:
+                payrollData.count
+
+        },
+
         expenses_by_category:
             expensesByCategory.map(
                 item => ({
@@ -754,8 +1009,8 @@ async function getFinancialData(
             )
 
     };
-}
 
+}
 
 // =====================================================
 // Financial Report
@@ -763,7 +1018,6 @@ async function getFinancialData(
 
 const getFinancialReport =
     AsyncWrapper(
-
         async (
             req,
             res,
@@ -773,7 +1027,6 @@ const getFinancialReport =
             const academy_id =
                 getAcademyId(req);
 
-
             // =========================================
             // Period
             // =========================================
@@ -782,7 +1035,6 @@ const getFinancialReport =
                 getReportPeriod(
                     req.query
                 );
-
 
             if (
                 period.error
@@ -798,15 +1050,14 @@ const getFinancialReport =
                 );
 
                 return next(error);
-            }
 
+            }
 
             const {
                 start,
                 end
             } =
                 period;
-
 
             // =========================================
             // Previous Period
@@ -817,7 +1068,6 @@ const getFinancialReport =
                     start,
                     end
                 );
-
 
             // =========================================
             // Current Data
@@ -834,7 +1084,6 @@ const getFinancialReport =
 
                 );
 
-
             // =========================================
             // Previous Data
             // =========================================
@@ -850,7 +1099,6 @@ const getFinancialReport =
 
                 );
 
-
             // =========================================
             // Growth
             // =========================================
@@ -864,7 +1112,6 @@ const getFinancialReport =
 
                 );
 
-
             const expenseGrowth =
                 calculateGrowth(
 
@@ -874,7 +1121,6 @@ const getFinancialReport =
 
                 );
 
-
             const profitGrowth =
                 calculateGrowth(
 
@@ -883,7 +1129,6 @@ const getFinancialReport =
                     previous.net_profit
 
                 );
-
 
             // =========================================
             // Response
@@ -948,6 +1193,9 @@ const getFinancialReport =
                         invoiced_remaining_amount:
                             current.invoiced_remaining_amount,
 
+                        teacher_payroll:
+                            current.teacher_payroll,
+
                         expenses_by_category:
                             current.expenses_by_category
 
@@ -962,7 +1210,10 @@ const getFinancialReport =
                             previous.expenses,
 
                         net_profit:
-                            previous.net_profit
+                            previous.net_profit,
+
+                        teacher_payroll:
+                            previous.teacher_payroll
 
                     },
 
@@ -984,9 +1235,11 @@ const getFinancialReport =
             });
 
         }
-
     );
 
+// =====================================================
+// Export
+// =====================================================
 
 module.exports = {
 

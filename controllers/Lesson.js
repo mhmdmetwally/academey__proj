@@ -1,284 +1,338 @@
-const AsyncWrapper =
-    require('../middleware/AsyncWrapper');
+const AsyncWrapper =require('../middleware/AsyncWrapper');
 
-const Lesson =
-    require('../models/Lesson');
+const Lesson =require('../models/Lesson');
 
-const StudentAssignment =
-    require('../models/StudentAssignment');
+const StudentAssignment =require('../models/StudentAssignment');
 
-const StudentSubject =
-    require('../models/StudentSubject');
+const StudentSubject =require('../models/StudentSubject');
 
-const Supervisor =
-    require('../models/Supervisor');
+const TeacherAssignment =require('../models/TeacherAssignment');
 
-const app_error =
-    require('../utils/AppError');
+const app_error =require('../utils/AppError');
 
-const http_status_text =
-    require('../utils/HttpStatusText');
+const http_status_text =require('../utils/HttpStatusText');
 
-const user_role =
-    require('../utils/UserRole');
+const {getAcademyId,getStudentAssignmentForUser,getStudentSubjectForUser,getTeacherAssignmentForUser,getLessonForUser} = require('../utils/AccessScope');
 
-const {
-    getAcademyId,
-    getStudentAssignmentForUser,
-    getTeacherAssignmentForUser,
-    getLessonForUser
-} = require('../utils/AccessScope');
+// =====================================================// Normalize Lesson Date//// 18:00 -> 18:00// 18:25 -> 18:00// 18:59 -> 18:00// =====================================================
 
+const normalizeLessonDate = (date) => {
 
-/*
-=====================================================
-Normalize Lesson Date
-=====================================================
+const result =
+    new Date(date);
 
-Example:
+if (Number.isNaN(result.getTime())) {
+    return null;
+}
 
-18:00 -> 18:00
-18:10 -> 18:00
-18:30 -> 18:00
-18:59 -> 18:00
-=====================================================
-*/
+result.setMinutes(0);
+result.setSeconds(0);
+result.setMilliseconds(0);
 
-const normalizeLessonDate = (value) => {
-
-    const date = new Date(value);
-
-
-    if (Number.isNaN(date.getTime())) {
-
-        return null;
-
-    }
-
-
-    date.setMinutes(0);
-    date.setSeconds(0);
-    date.setMilliseconds(0);
-
-
-    return date;
+return result;
 
 };
 
+// =====================================================// Create Lesson// =====================================================
 
-/*
-=====================================================
-Create Lesson
-=====================================================
-*/
+const createLesson = AsyncWrapper(async (req, res, next) => {
 
-const createLesson = AsyncWrapper(
-
-    async (req, res, next) => {
-
-        const academy_id =
-            getAcademyId(req);
+    const academy_id =
+        getAcademyId(req);
 
 
-        const {
-            student_assignment_id,
-            student_subject_id,
-            teacher_assignment_id,
-            lesson_date,
-            notes
-        } = req.body;
+    const {
+        student_assignment_id,
+        student_subject_id,
+        teacher_assignment_id,
+        lesson_date,
+        duration_minutes,
+        notes
+    } = req.body;
 
 
-        if (
-            !student_assignment_id ||
-            !student_subject_id ||
-            !teacher_assignment_id ||
-            !lesson_date
-        ) {
+    // =========================================
+    // Required fields
+    // =========================================
 
-            const error =
-                new app_error();
+    if (
+        !student_assignment_id ||
+        !student_subject_id ||
+        !teacher_assignment_id ||
+        !lesson_date ||
+        duration_minutes === undefined
+    ) {
 
-            error.create(
-                'student_assignment_id, student_subject_id, teacher_assignment_id and lesson_date are required',
-                400,
-                http_status_text.FAIL
-            );
+        const error =
+            new app_error();
 
-            return next(error);
+        error.create(
+            'student_assignment_id, student_subject_id, teacher_assignment_id, lesson_date and duration_minutes are required',
+            400,
+            http_status_text.FAIL
+        );
 
-        }
-
-
-        /*
-        ================================================
-        Normalize date
-        ================================================
-        */
-
-        const normalizedDate =
-            normalizeLessonDate(
-                lesson_date
-            );
+        return next(error);
+    }
 
 
-        if (!normalizedDate) {
+    // =========================================
+    // Validate duration
+    // =========================================
 
-            const error =
-                new app_error();
-
-            error.create(
-                'invalid lesson date',
-                400,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-
-        }
+    const duration =
+        Number(duration_minutes);
 
 
-        /*
-        ================================================
-        Check Student
-        ================================================
-        */
+    if (
+        !Number.isInteger(duration) ||
+        duration <= 0
+    ) {
 
-        const studentAssignment =
-            await getStudentAssignmentForUser(
+        const error =
+            new app_error();
 
-                req,
+        error.create(
+            'duration_minutes must be a positive integer',
+            400,
+            http_status_text.FAIL
+        );
 
-                student_assignment_id
-
-            );
-
-
-        if (!studentAssignment) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'you cannot access this student',
-                403,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-
-        }
+        return next(error);
+    }
 
 
-        /*
-        ================================================
-        Check Student Subject
-        ================================================
-        */
+    // =========================================
+    // Normalize lesson date
+    // =========================================
 
-        const studentSubject =
-            await StudentSubject.findOne({
+    const normalizedDate =
+        normalizeLessonDate(lesson_date);
 
-                _id:
-                    student_subject_id,
+
+    if (!normalizedDate) {
+
+        const error =
+            new app_error();
+
+        error.create(
+            'invalid lesson_date',
+            400,
+            http_status_text.FAIL
+        );
+
+        return next(error);
+    }
+
+
+    // =========================================
+    // Student Access
+    // =========================================
+
+    const studentAssignment =
+        await getStudentAssignmentForUser(
+            req,
+            student_assignment_id
+        );
+
+
+    if (!studentAssignment) {
+
+        const error =
+            new app_error();
+
+        error.create(
+            'you cannot access this student',
+            403,
+            http_status_text.FAIL
+        );
+
+        return next(error);
+    }
+
+
+    // =========================================
+    // Student Subject Access
+    // =========================================
+
+    const studentSubject =
+        await getStudentSubjectForUser(
+            req,
+            student_subject_id
+        );
+
+
+    if (!studentSubject) {
+
+        const error =
+            new app_error();
+
+        error.create(
+            'student subject not found or you cannot access it',
+            404,
+            http_status_text.FAIL
+        );
+
+        return next(error);
+    }
+
+
+    // =========================================
+    // Student Subject must belong to
+    // the same StudentAssignment
+    // =========================================
+
+    if (
+        String(
+            studentSubject.student_assignment
+        ) !==
+        String(student_assignment_id)
+    ) {
+
+        const error =
+            new app_error();
+
+        error.create(
+            'student subject does not belong to this student',
+            400,
+            http_status_text.FAIL
+        );
+
+        return next(error);
+    }
+
+
+    // =========================================
+    // Teacher Access
+    // =========================================
+
+    const teacherAssignment =
+        await getTeacherAssignmentForUser(
+            req,
+            teacher_assignment_id
+        );
+
+
+    if (!teacherAssignment) {
+
+        const error =
+            new app_error();
+
+        error.create(
+            'teacher assignment not found or you cannot access it',
+            404,
+            http_status_text.FAIL
+        );
+
+        return next(error);
+    }
+
+
+    // =========================================
+    // Teacher must be the teacher
+    // assigned to StudentSubject
+    // =========================================
+
+    if (
+        String(
+            studentSubject.teacher
+        ) !==
+        String(teacher_assignment_id)
+    ) {
+
+        const error =
+            new app_error();
+
+        error.create(
+            'this teacher is not assigned to this student subject',
+            400,
+            http_status_text.FAIL
+        );
+
+        return next(error);
+    }
+
+
+    // =========================================
+    // Same Academy Checks
+    // =========================================
+
+    if (
+        String(
+            studentAssignment.academy_id
+        ) !==
+        String(academy_id)
+    ) {
+
+        const error =
+            new app_error();
+
+        error.create(
+            'student does not belong to this academy',
+            403,
+            http_status_text.FAIL
+        );
+
+        return next(error);
+    }
+
+
+    if (
+        String(
+            studentSubject.academy_id
+        ) !==
+        String(academy_id)
+    ) {
+
+        const error =
+            new app_error();
+
+        error.create(
+            'student subject does not belong to this academy',
+            403,
+            http_status_text.FAIL
+        );
+
+        return next(error);
+    }
+
+
+    if (
+        String(
+            teacherAssignment.academy_id
+        ) !==
+        String(academy_id)
+    ) {
+
+        const error =
+            new app_error();
+
+        error.create(
+            'teacher does not belong to this academy',
+            403,
+            http_status_text.FAIL
+        );
+
+        return next(error);
+    }
+
+
+    // =========================================
+    // Create Lesson
+    // =========================================
+
+    try {
+
+        const lesson =
+            await Lesson.create({
 
                 academy_id,
 
                 student_assignment:
                     student_assignment_id,
 
-                is_active: true
-
-            });
-
-
-        if (!studentSubject) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'student subject not found',
-                404,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-
-        }
-
-
-        /*
-        ================================================
-        Check Teacher
-        ================================================
-        */
-
-        const teacherAssignment =
-            await getTeacherAssignmentForUser(
-
-                req,
-
-                teacher_assignment_id
-
-            );
-
-
-        if (!teacherAssignment) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'you cannot access this teacher',
-                403,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-
-        }
-
-
-        /*
-        ================================================
-        Teacher must be assigned to subject
-        ================================================
-        */
-
-        if (
-            String(studentSubject.teacher)
-            !==
-            String(teacher_assignment_id)
-        ) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'this teacher is not assigned to this student subject',
-                403,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-
-        }
-
-
-        /*
-        ================================================
-        Check duplicate BEFORE create
-        ================================================
-        */
-
-        const existingLesson =
-            await Lesson.findOne({
-
-                academy_id,
-
-                student_assignment:
-                    student_assignment_id,
+                student:
+                    studentAssignment.student,
 
                 student_subject:
                     student_subject_id,
@@ -287,498 +341,20 @@ const createLesson = AsyncWrapper(
                     teacher_assignment_id,
 
                 lesson_date:
-                    normalizedDate
+                    normalizedDate,
 
-            });
-
-
-        if (existingLesson) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'this lesson is already registered for this hour',
-                409,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-
-        }
-
-
-        /*
-        ================================================
-        Create Lesson
-        ================================================
-        */
-
-        try {
-
-            const lesson =
-                await Lesson.create({
-
-                    academy_id,
-
-                    student_assignment:
-                        studentAssignment._id,
-
-                    student:
-                        studentAssignment.student,
-
-                    student_subject:
-                        studentSubject._id,
-
-                    teacher:
-                        teacherAssignment._id,
-
-                    lesson_date:
-                        normalizedDate,
-
-                    notes,
-
-                    status:
-                        'scheduled'
-
-                });
-
-
-            return res.status(201).json({
+                duration_minutes:
+                    duration,
 
                 status:
-                    http_status_text.SUCCESS,
-
-                data: {
-                    lesson
-                }
-
-            });
-
-        } catch (error) {
-
-            /*
-            MongoDB duplicate key
-            */
-
-            if (
-                error.code === 11000
-            ) {
-
-                const duplicateError =
-                    new app_error();
-
-                duplicateError.create(
-                    'this lesson is already registered for this hour',
-                    409,
-                    http_status_text.FAIL
-                );
-
-                return next(
-                    duplicateError
-                );
-
-            }
-
-
-            return next(error);
-
-        }
-
-    }
-);
-
-
-/*
-=====================================================
-Get Lessons
-=====================================================
-*/
-
-const getLessons = AsyncWrapper(
-
-    async (req, res, next) => {
-
-        const academy_id =
-            getAcademyId(req);
-
-
-        /*
-        ================================================
-        Academy Admin
-        ================================================
-        */
-
-        if (
-            req.user.role ===
-            user_role.academy_admin
-        ) {
-
-            const lessons =
-                await Lesson.find({
-
-                    academy_id
-
-                })
-
-                .populate('student')
-
-                .populate('student_assignment')
-
-                .populate('student_subject')
-
-                .populate('teacher')
-
-                .sort({
-                    lesson_date: -1
-                });
-
-
-            return res.status(200).json({
-
-                status:
-                    http_status_text.SUCCESS,
-
-                data: {
-                    lessons
-                }
-
-            });
-
-        }
-
-
-        /*
-        ================================================
-        Supervisor
-        ================================================
-        */
-
-        if (
-            req.user.role ===
-            user_role.supervisor
-        ) {
-
-            const supervisor =
-                await Supervisor.findOne({
-
-                    supervisor:
-                        req.user.id,
-
-                    academy_id,
-
-                    is_active: true
-
-                });
-
-
-            if (!supervisor) {
-
-                const error =
-                    new app_error();
-
-                error.create(
-                    'supervisor is not assigned to this academy',
-                    403,
-                    http_status_text.FAIL
-                );
-
-                return next(error);
-
-            }
-
-
-            const studentAssignments =
-                await StudentAssignment.find({
-
-                    academy_id,
-
-                    supervisor:
-                        supervisor._id,
-
-                    is_active: true
-
-                }).select('_id');
-
-
-            const studentAssignmentIds =
-                studentAssignments.map(
-                    item => item._id
-                );
-
-
-            const lessons =
-                await Lesson.find({
-
-                    academy_id,
-
-                    student_assignment: {
-                        $in:
-                            studentAssignmentIds
-                    }
-
-                })
-
-                .populate('student')
-
-                .populate('student_assignment')
-
-                .populate('student_subject')
-
-                .populate('teacher')
-
-                .sort({
-                    lesson_date: -1
-                });
-
-
-            return res.status(200).json({
-
-                status:
-                    http_status_text.SUCCESS,
-
-                data: {
-                    lessons
-                }
-
-            });
-
-        }
-
-
-        const error =
-            new app_error();
-
-        error.create(
-            'you are not allowed to view lessons',
-            403,
-            http_status_text.FAIL
-        );
-
-        return next(error);
-
-    }
-);
-
-
-/*
-=====================================================
-Get Student Lessons
-=====================================================
-*/
-
-const getStudentLessons = AsyncWrapper(
-
-    async (req, res, next) => {
-
-        const student_assignment_id =
-            req.params.student_assignment_id;
-
-
-        const studentAssignment =
-            await getStudentAssignmentForUser(
-
-                req,
-
-                student_assignment_id
-
-            );
-
-
-        if (!studentAssignment) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'you cannot access this student',
-                403,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-
-        }
-
-
-        const academy_id =
-            getAcademyId(req);
-
-
-        const lessons =
-            await Lesson.find({
-
-                academy_id,
-
-                student_assignment:
-                    studentAssignment._id
-
-            })
-
-            .populate('student')
-
-            .populate('student_subject')
-
-            .populate('teacher')
-
-            .sort({
-                lesson_date: -1
-            });
-
-
-        return res.status(200).json({
-
-            status:
-                http_status_text.SUCCESS,
-
-            data: {
-                lessons
-            }
-
-        });
-
-    }
-);
-
-
-/*
-=====================================================
-Update Lesson Status
-=====================================================
-*/
-
-const updateLessonStatus =
-    AsyncWrapper(
-
-        async (req, res, next) => {
-
-            const lesson_id =
-                req.params.lesson_id;
-
-
-            const {
-                status
-            } = req.body;
-
-
-            if (
-                ![
                     'scheduled',
-                    'completed',
-                    'cancelled'
-                ].includes(status)
-            ) {
 
-                const error =
-                    new app_error();
-
-                error.create(
-                    'invalid lesson status',
-                    400,
-                    http_status_text.FAIL
-                );
-
-                return next(error);
-
-            }
-
-
-            const lesson =
-                await getLessonForUser(
-
-                    req,
-
-                    lesson_id
-
-                );
-
-
-            if (!lesson) {
-
-                const error =
-                    new app_error();
-
-                error.create(
-                    'you cannot access this lesson',
-                    403,
-                    http_status_text.FAIL
-                );
-
-                return next(error);
-
-            }
-
-
-            lesson.status =
-                status;
-
-
-            await lesson.save();
-
-
-            return res.status(200).json({
-
-                status:
-                    http_status_text.SUCCESS,
-
-                data: {
-                    lesson
-                }
+                notes
 
             });
 
-        }
-    );
 
-
-/*
-=====================================================
-Cancel Lesson
-=====================================================
-*/
-
-const cancelLesson = AsyncWrapper(
-
-    async (req, res, next) => {
-
-        const lesson_id =
-            req.params.lesson_id;
-
-
-        const lesson =
-            await getLessonForUser(
-
-                req,
-
-                lesson_id
-
-            );
-
-
-        if (!lesson) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'you cannot access this lesson',
-                403,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-
-        }
-
-
-        lesson.status =
-            'cancelled';
-
-
-        await lesson.save();
-
-
-        return res.status(200).json({
+        return res.status(201).json({
 
             status:
                 http_status_text.SUCCESS,
@@ -789,20 +365,518 @@ const cancelLesson = AsyncWrapper(
 
         });
 
+    } catch (error) {
+
+        // =====================================
+        // Duplicate lesson
+        // =====================================
+
+        if (
+            error &&
+            error.code === 11000
+        ) {
+
+            const duplicateError =
+                new app_error();
+
+            duplicateError.create(
+                'a lesson already exists for this student, subject, teacher and hour',
+                409,
+                http_status_text.FAIL
+            );
+
+            return next(
+                duplicateError
+            );
+        }
+
+
+        return next(error);
     }
+
+}
+
 );
 
+// =====================================================// Get All Accessible Lessons// =====================================================
+
+const getLessons = AsyncWrapper(async (req, res, next) => {
+
+    const academy_id =
+        getAcademyId(req);
+
+
+    const filter = {
+        academy_id
+    };
+
+
+    // =========================================
+    // Optional filters
+    // =========================================
+
+    if (
+        req.query.student_assignment_id
+    ) {
+
+        const studentAssignment =
+            await getStudentAssignmentForUser(
+                req,
+                req.query.student_assignment_id
+            );
+
+
+        if (!studentAssignment) {
+
+            const error =
+                new app_error();
+
+            error.create(
+                'you cannot access this student',
+                403,
+                http_status_text.FAIL
+            );
+
+            return next(error);
+        }
+
+
+        filter.student_assignment =
+            req.query.student_assignment_id;
+    }
+
+
+    if (
+        req.query.student_subject_id
+    ) {
+
+        const studentSubject =
+            await getStudentSubjectForUser(
+                req,
+                req.query.student_subject_id
+            );
+
+
+        if (!studentSubject) {
+
+            const error =
+                new app_error();
+
+            error.create(
+                'student subject not found or you cannot access it',
+                404,
+                http_status_text.FAIL
+            );
+
+            return next(error);
+        }
+
+
+        filter.student_subject =
+            req.query.student_subject_id;
+    }
+
+
+    if (
+        req.query.teacher_assignment_id
+    ) {
+
+        const teacherAssignment =
+            await getTeacherAssignmentForUser(
+                req,
+                req.query.teacher_assignment_id
+            );
+
+
+        if (!teacherAssignment) {
+
+            const error =
+                new app_error();
+
+            error.create(
+                'teacher assignment not found or you cannot access it',
+                404,
+                http_status_text.FAIL
+            );
+
+            return next(error);
+        }
+
+
+        filter.teacher =
+            req.query.teacher_assignment_id;
+    }
+
+
+    if (req.query.status) {
+
+        filter.status =
+            req.query.status;
+    }
+
+
+    // =========================================
+    // Date filters
+    // =========================================
+
+    if (req.query.from) {
+
+        const from =
+            new Date(req.query.from);
+
+
+        if (Number.isNaN(from.getTime())) {
+
+            const error =
+                new app_error();
+
+            error.create(
+                'invalid from date',
+                400,
+                http_status_text.FAIL
+            );
+
+            return next(error);
+        }
+
+
+        filter.lesson_date = {
+            ...filter.lesson_date,
+            $gte: from
+        };
+    }
+
+
+    if (req.query.to) {
+
+        const to =
+            new Date(req.query.to);
+
+
+        if (Number.isNaN(to.getTime())) {
+
+            const error =
+                new app_error();
+
+            error.create(
+                'invalid to date',
+                400,
+                http_status_text.FAIL
+            );
+
+            return next(error);
+        }
+
+
+        filter.lesson_date = {
+            ...filter.lesson_date,
+            $lte: to
+        };
+    }
+
+
+    // =========================================
+    // Get Lessons
+    // =========================================
+
+    const lessons =
+        await Lesson.find(filter)
+
+            .populate(
+                'student',
+                'name phone'
+            )
+
+            .populate(
+                'student_assignment'
+            )
+
+            .populate(
+                'student_subject'
+            )
+
+            .populate({
+                path: 'teacher',
+                populate: {
+                    path: 'teacher'
+                }
+            })
+
+            .sort({
+                lesson_date: -1
+            });
+
+
+    return res.status(200).json({
+
+        status:
+            http_status_text.SUCCESS,
+
+        data: {
+            lessons
+        }
+
+    });
+
+}
+
+);
+
+// =====================================================// Get Student Lessons// =====================================================
+
+const getStudentLessons = AsyncWrapper(async (req, res, next) => {
+
+    const {
+        student_assignment_id
+    } = req.params;
+
+
+    const studentAssignment =
+        await getStudentAssignmentForUser(
+            req,
+            student_assignment_id
+        );
+
+
+    if (!studentAssignment) {
+
+        const error =
+            new app_error();
+
+        error.create(
+            'you cannot access this student',
+            403,
+            http_status_text.FAIL
+        );
+
+        return next(error);
+    }
+
+
+    const lessons =
+        await Lesson.find({
+
+            academy_id:
+                getAcademyId(req),
+
+            student_assignment:
+                student_assignment_id
+
+        })
+
+            .populate(
+                'student_subject'
+            )
+
+            .populate({
+                path: 'teacher',
+                populate: {
+                    path: 'teacher'
+                }
+            })
+
+            .sort({
+                lesson_date: -1
+            });
+
+
+    return res.status(200).json({
+
+        status:
+            http_status_text.SUCCESS,
+
+        data: {
+            lessons
+        }
+
+    });
+
+}
+
+);
+
+// =====================================================// Update Lesson Status// =====================================================
+
+const updateLessonStatus = AsyncWrapper(async (req, res, next) => {
+
+    const {
+        lesson_id
+    } = req.params;
+
+
+    const {
+        status
+    } = req.body;
+
+
+    const allowedStatuses = [
+        'scheduled',
+        'completed',
+        'cancelled'
+    ];
+
+
+    if (
+        !allowedStatuses.includes(status)
+    ) {
+
+        const error =
+            new app_error();
+
+        error.create(
+            'invalid lesson status',
+            400,
+            http_status_text.FAIL
+        );
+
+        return next(error);
+    }
+
+
+    const lesson =
+        await getLessonForUser(
+            req,
+            lesson_id
+        );
+
+
+    if (!lesson) {
+
+        const error =
+            new app_error();
+
+        error.create(
+            'lesson not found or you cannot access it',
+            404,
+            http_status_text.FAIL
+        );
+
+        return next(error);
+    }
+
+
+    if (
+        lesson.status ===
+        'cancelled' &&
+        status !== 'cancelled'
+    ) {
+
+        const error =
+            new app_error();
+
+        error.create(
+            'cancelled lesson cannot be reactivated',
+            400,
+            http_status_text.FAIL
+        );
+
+        return next(error);
+    }
+
+
+    lesson.status =
+        status;
+
+
+    await lesson.save();
+
+
+    return res.status(200).json({
+
+        status:
+            http_status_text.SUCCESS,
+
+        data: {
+            lesson
+        }
+
+    });
+
+}
+
+);
+
+// =====================================================// Cancel Lesson// =====================================================
+
+const cancelLesson = AsyncWrapper(async (req, res, next) => {
+
+    const {
+        lesson_id
+    } = req.params;
+
+
+    const lesson =
+        await getLessonForUser(
+            req,
+            lesson_id
+        );
+
+
+    if (!lesson) {
+
+        const error =
+            new app_error();
+
+        error.create(
+            'lesson not found or you cannot access it',
+            404,
+            http_status_text.FAIL
+        );
+
+        return next(error);
+    }
+
+
+    if (
+        lesson.status ===
+        'cancelled'
+    ) {
+
+        const error =
+            new app_error();
+
+        error.create(
+            'lesson is already cancelled',
+            400,
+            http_status_text.FAIL
+        );
+
+        return next(error);
+    }
+
+
+    lesson.status =
+        'cancelled';
+
+
+    await lesson.save();
+
+
+    return res.status(200).json({
+
+        status:
+            http_status_text.SUCCESS,
+
+        data: {
+            lesson
+        }
+
+    });
+
+}
+
+);
 
 module.exports = {
 
-    createLesson,
+createLesson,
 
-    getLessons,
+getLessons,
 
-    getStudentLessons,
+getStudentLessons,
 
-    updateLessonStatus,
+updateLessonStatus,
 
-    cancelLesson
+cancelLesson
 
 };

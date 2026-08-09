@@ -45,6 +45,11 @@ GET    /lesson/student/:student_assignment_id
 PATCH  /lesson/:lesson_id/status
 DELETE /lesson/:lesson_id
 
+POST   /teacher-payroll/generate
+GET    /teacher-payroll
+GET    /teacher-payroll/:payroll_id
+PATCH  /teacher-payroll/:payroll_id/pay
+PATCH  /teacher-payroll/:payroll_id/cancel
 
 POST   /invoice
 GET    /invoice
@@ -55,6 +60,19 @@ DELETE /invoice/:invoice_id
 POST   /payment
 GET    /payment
 GET    /payment/:payment_id
+GET    /payment/invoice/:invoice_id
+POST   /payment/:payment_id/allocate
+DELETE /payment/:payment_id
+
+
+POST   /expense
+GET    /expense
+GET    /expense/:expense_id
+PATCH  /expense/:expense_id
+DELETE /expense/:expense_id
+
+
+GET    /financial/report
 
 ///////////////
 bill in flow 

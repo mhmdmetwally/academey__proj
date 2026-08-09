@@ -33,6 +33,9 @@ const student_subject_routes =
 const lesson_routes =
     require('./routes/Lesson');
 
+const teacher_payroll_routes = 
+    require('./routes/TeacherPayroll')
+
 const invoice_routes =
     require('./routes/Invoice');
 
@@ -167,6 +170,11 @@ app.use(
 app.use(
     '/lesson',
     lesson_routes
+);
+
+app.use(
+    '/teacher-payroll',
+    teacher_payroll_routes
 );
 
 app.use(

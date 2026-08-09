@@ -5,141 +5,233 @@ const mongoose = require('mongoose');
 // Invoice Item
 // =====================================================
 
-const InvoiceItemSchema = new mongoose.Schema(
-    {
-        student_assignment: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'StudentAssignment',
-            required: true
-        },
+const InvoiceItemSchema =
+    new mongoose.Schema(
+        {
+            // =========================================
+            // الطالب داخل الأكاديمية
+            // =========================================
 
-        student_subject: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'StudentSubject',
-            required: true
-        },
-
-        // الحصص التي تم احتسابها في هذه الفاتورة
-        lessons: [
-            {
+            student_assignment: {
                 type: mongoose.Schema.Types.ObjectId,
-                ref: 'Lesson'
+                ref: 'StudentAssignment',
+                required: true
+            },
+
+            // =========================================
+            // مادة الطالب
+            // =========================================
+
+            student_subject: {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: 'StudentSubject',
+                required: true
+            },
+
+            // =========================================
+            // الحصص التي دخلت في الفاتورة
+            // =========================================
+
+            lessons: [
+                {
+                    type: mongoose.Schema.Types.ObjectId,
+                    ref: 'Lesson'
+                }
+            ],
+
+            // =========================================
+            // عدد الحصص
+            // =========================================
+
+            lessons_count: {
+                type: Number,
+                required: true,
+                min: 0
+            },
+
+            // =========================================
+            // إجمالي الدقائق
+            // =========================================
+
+            total_minutes: {
+                type: Number,
+                required: true,
+                min: 0
+            },
+
+            // =========================================
+            // إجمالي الساعات
+            //
+            // مثال:
+            // 80 دقيقة = 1.333333 ساعة
+            // =========================================
+
+            billing_hours: {
+                type: Number,
+                required: true,
+                min: 0
+            },
+
+            // =========================================
+            // سعر الساعة وقت إنشاء الفاتورة
+            //
+            // Snapshot
+            // =========================================
+
+            price_per_lesson: {
+                type: Number,
+                required: true,
+                min: 0
+            },
+
+            // =========================================
+            // إجمالي البند
+            // =========================================
+
+            total: {
+                type: Number,
+                required: true,
+                min: 0
             }
-        ],
-
-        // Snapshot
-        lessons_count: {
-            type: Number,
-            required: true,
-            min: 0
         },
-
-        // السعر وقت إنشاء الفاتورة
-        price_per_lesson: {
-            type: Number,
-            required: true,
-            min: 0
-        },
-
-        total: {
-            type: Number,
-            required: true,
-            min: 0
+        {
+            _id: true
         }
-    },
-    {
-        _id: true
-    }
-);
+    );
 
 
 // =====================================================
 // Invoice
 // =====================================================
 
-const InvoiceSchema = new mongoose.Schema(
-    {
-        academy_id: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'Academy',
-            required: true
-        },
+const InvoiceSchema =
+    new mongoose.Schema(
+        {
+            // =========================================
+            // الأكاديمية
+            // =========================================
 
-        family: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'User',
-            required: true
-        },
+            academy_id: {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: 'Academy',
+                required: true
+            },
 
-        items: {
-            type: [InvoiceItemSchema],
+            // =========================================
+            // الأسرة
+            // =========================================
 
-            required: true,
+            family: {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: 'User',
+                required: true
+            },
 
-            validate: {
-                validator: function (value) {
-                    return value.length > 0;
-                },
+            // =========================================
+            // بنود الفاتورة
+            // =========================================
 
-                message:
-                    'invoice must contain at least one item'
+            items: {
+                type: [InvoiceItemSchema],
+
+                required: true,
+
+                validate: {
+                    validator: function (value) {
+
+                        return value.length > 0;
+
+                    },
+
+                    message:
+                        'invoice must contain at least one item'
+                }
+            },
+
+            // =========================================
+            // إجمالي الفاتورة
+            // =========================================
+
+            total_amount: {
+                type: Number,
+                required: true,
+                min: 0
+            },
+
+            // =========================================
+            // المدفوع
+            // =========================================
+
+            paid_amount: {
+                type: Number,
+                default: 0,
+                min: 0
+            },
+
+            // =========================================
+            // المتبقي
+            // =========================================
+
+            remaining_amount: {
+                type: Number,
+                required: true,
+                min: 0
+            },
+
+            // =========================================
+            // الحالة
+            // =========================================
+
+            status: {
+                type: String,
+
+                enum: [
+                    'unpaid',
+                    'partially_paid',
+                    'paid',
+                    'cancelled'
+                ],
+
+                default: 'unpaid'
+            },
+
+            // =========================================
+            // الشهر
+            //
+            // YYYY-MM
+            // =========================================
+
+            billing_month: {
+                type: String,
+
+                required: true,
+
+                match:
+                    /^\d{4}-(0[1-9]|1[0-2])$/
+            },
+
+            // =========================================
+            // تاريخ الفاتورة
+            // =========================================
+
+            invoice_date: {
+                type: Date,
+                default: Date.now
+            },
+
+            // =========================================
+            // ملاحظات
+            // =========================================
+
+            notes: {
+                type: String,
+                trim: true
             }
         },
-
-        total_amount: {
-            type: Number,
-            required: true,
-            min: 0
-        },
-
-        paid_amount: {
-            type: Number,
-            default: 0,
-            min: 0
-        },
-
-        remaining_amount: {
-            type: Number,
-            required: true,
-            min: 0
-        },
-
-        status: {
-            type: String,
-
-            enum: [
-                'unpaid',
-                'partially_paid',
-                'paid',
-                'cancelled'
-            ],
-
-            default: 'unpaid'
-        },
-
-        billing_month: {
-            type: String,
-            required: true,
-
-            match:
-                /^\d{4}-(0[1-9]|1[0-2])$/
-        },
-
-        invoice_date: {
-            type: Date,
-            default: Date.now
-        },
-
-        notes: {
-            type: String,
-            trim: true
+        {
+            timestamps: true
         }
-    },
-
-    {
-        timestamps: true
-    }
-);
+    );
 
 
 // =====================================================
@@ -151,10 +243,12 @@ InvoiceSchema.index({
     family: 1
 });
 
+
 InvoiceSchema.index({
     academy_id: 1,
     billing_month: 1
 });
+
 
 InvoiceSchema.index({
     academy_id: 1,

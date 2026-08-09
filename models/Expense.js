@@ -1,51 +1,84 @@
 const mongoose = require('mongoose');
 
+// =====================================================
+// Expense
+// =====================================================
+
 const ExpenseSchema = new mongoose.Schema(
     {
+        // =========================================
+        // Academy
+        // =========================================
+
         academy_id: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'Academy',
-            required: true
+            required: true,
+            index: true
         },
 
-        // نوع المصروف
+        // =========================================
+        // Payroll
+        //
+        // موجود فقط عندما يكون المصروف
+        // خاص براتب مدرس
+        // =========================================
+
+        payroll: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'TeacherPayroll',
+            default: null,
+            index: true
+        },
+
+        // =========================================
+        // Category
+        // =========================================
+
         category: {
             type: String,
-            enum: [
-                'teacher_salary',
-                'advertising',
-                'media_buyer',
-                'rent',
-                'internet',
-                'software',
-                'transportation',
-                'equipment',
-                'other'
-            ],
-            required: true
+            required: true,
+            trim: true,
+            index: true
         },
 
-        // اسم / وصف المصروف
+        // =========================================
+        // Title
+        // =========================================
+
         title: {
             type: String,
             required: true,
             trim: true
         },
 
+        // =========================================
+        // Amount
+        // =========================================
+
         amount: {
             type: Number,
             required: true,
-            min: 0.01
+            min: 0
         },
+
+        // =========================================
+        // Expense Date
+        // =========================================
 
         expense_date: {
             type: Date,
-            required: true,
-            default: Date.now
+            default: Date.now,
+            index: true
         },
+
+        // =========================================
+        // Payment Method
+        // =========================================
 
         payment_method: {
             type: String,
+
             enum: [
                 'cash',
                 'bank_transfer',
@@ -53,26 +86,43 @@ const ExpenseSchema = new mongoose.Schema(
                 'card',
                 'other'
             ],
+
             default: 'cash'
         },
+
+        // =========================================
+        // Reference
+        // =========================================
 
         reference: {
             type: String,
             trim: true
         },
 
-        notes: {
-            type: String,
-            trim: true
-        },
+        // =========================================
+        // Status
+        // =========================================
 
         status: {
             type: String,
+
             enum: [
                 'completed',
                 'cancelled'
             ],
-            default: 'completed'
+
+            default: 'completed',
+
+            index: true
+        },
+
+        // =========================================
+        // Notes
+        // =========================================
+
+        notes: {
+            type: String,
+            trim: true
         }
     },
 
@@ -80,7 +130,6 @@ const ExpenseSchema = new mongoose.Schema(
         timestamps: true
     }
 );
-
 
 // =====================================================
 // Indexes
@@ -99,13 +148,10 @@ ExpenseSchema.index({
 
 ExpenseSchema.index({
     academy_id: 1,
-    status: 1,
-    expense_date: 1
+    payroll: 1
 });
 
-
-module.exports =
-    mongoose.model(
-        'Expense',
-        ExpenseSchema
-    );
+module.exports = mongoose.model(
+    'Expense',
+    ExpenseSchema
+);
