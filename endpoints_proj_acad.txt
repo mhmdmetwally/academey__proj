@@ -1,18 +1,19 @@
-/academy/register
-/academy/login
-/academy/supervisor/active
-/academy/supervisor/stop
-
+POST   /academy/register
+POST   /academy/login
+GET    /academy/me
+PATCH  /academy/me
+PATCH  /academy/change-password
+PATCH  /academy/supervisor/active
+PATCH  /academy/supervisor/stop
 
 /user/register
 /user/login
 
-
-/admin/academy/student_count
-/admin/academy/showallacademy
-/admin/academy/singleacademy
-/admin/academy/stop
-/admin/academy/active
+GET    /admin/academy/student_count/:academy_id
+GET    /admin/academy/showallacademy
+GET    /admin/academy/singleacademy/:academy_id
+PATCH  /admin/academy/stop/:academy_id
+PATCH  /admin/academy/active/:academy_id
 
 
 POST   /teacher
