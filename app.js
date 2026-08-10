@@ -146,12 +146,7 @@ app.use(
     '/teacher',
     teacher_routes
 );
-const bcrypt = require('bcryptjs');
 
-(async () => {
-    const hash = await bcrypt.hash('Ahmed@100', 10);
-    console.log(hash);
-})();
 app.use(
     '/student',
      student_routes
