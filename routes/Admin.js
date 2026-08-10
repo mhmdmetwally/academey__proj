@@ -20,7 +20,7 @@ const verify_token =
 // =========================
 
 router.get(
-    '/student_count/:academy_id',
+    '/academy/student_count/:academy_id',
 
     verify_token,
 
