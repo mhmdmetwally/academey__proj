@@ -2,7 +2,7 @@
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
-
+const bcrypt = require('bcrypt');
 const http_status_text =
     require('./utils/HttpStatusText');
 
@@ -146,7 +146,12 @@ app.use(
     '/teacher',
     teacher_routes
 );
+const bcrypt = require('bcryptjs');
 
+(async () => {
+    const hash = await bcrypt.hash('Ahmed@100', 10);
+    console.log(hash);
+})();
 app.use(
     '/student',
      student_routes
