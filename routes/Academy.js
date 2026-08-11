@@ -14,17 +14,16 @@ const user_role =
 const verify_token =
     require('../middleware/VerifyToken');
 
+
 // =====================================================
 // Public Routes
 // =====================================================
 
-// Register Academy
 router.post(
     '/register',
     academy_controller.register
 );
 
-// Academy Login
 router.post(
     '/login',
     academy_controller.login
@@ -32,7 +31,7 @@ router.post(
 
 
 // =====================================================
-// Academy Admin Routes
+// Academy Admin
 // =====================================================
 
 // Get My Academy
@@ -49,7 +48,7 @@ router.get(
 );
 
 
-// Update Academy
+// Update My Academy
 router.patch(
     '/me',
 
@@ -82,9 +81,37 @@ router.patch(
 // Academy Admin Only
 // =====================================================
 
+// Get All Supervisors
+router.get(
+    '/supervisor',
+
+    verify_token,
+
+    allowed_tool(
+        user_role.academy_admin
+    ),
+
+    academy_controller.getAllSupervisors
+);
+
+
+// Get Single Supervisor
+router.get(
+    '/supervisor/:supervisor_id',
+
+    verify_token,
+
+    allowed_tool(
+        user_role.academy_admin
+    ),
+
+    academy_controller.getSingleSupervisor
+);
+
+
 // Activate Supervisor
 router.patch(
-    '/supervisor/active',
+    '/supervisor/active/:supervisor_id',
 
     verify_token,
 
@@ -98,7 +125,7 @@ router.patch(
 
 // Stop Supervisor
 router.patch(
-    '/supervisor/stop',
+    '/supervisor/stop/:supervisor_id',
 
     verify_token,
 

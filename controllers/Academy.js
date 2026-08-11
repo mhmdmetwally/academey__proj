@@ -583,6 +583,84 @@ const changePassword = AsyncWrapper(
 );
 
 
+//=====================================================
+// get all supervisor
+// academy admin
+//=====================================================
+
+const getAllSupervisors = AsyncWrapper(
+    async (req, res, next) => {
+
+        const academy_id = req.user.id;
+
+        const supervisors =
+            await Supervisor
+                .find({
+                    academy_id: academy_id
+                })
+                .populate(
+                    'user',
+                    'name phone role is_active'
+                )
+                .sort({
+                    createdAt: -1
+                });
+
+        return res.status(200).json({
+            status: 'success',
+
+            results: supervisors.length,
+
+            data: supervisors
+        });
+    }
+);
+
+// =====================================================
+// Get Single Academy
+// =====================================================
+
+const getSingleSupervisor = AsyncWrapper(
+    async (req, res, next) => {
+
+        const academy_id = req.user.id;
+
+        const { supervisor_id } =
+            req.params;
+
+        const supervisor =
+            await Supervisor
+                .findOne({
+                    _id: supervisor_id,
+                    academy_id: academy_id
+                })
+                .populate(
+                    'user',
+                    'name phone role is_active'
+                );
+
+        if (!supervisor) {
+
+            const error =
+                new app_error();
+
+            error.create(
+                'Supervisor not found',
+                404,
+                http_status_text.FAIL
+            );
+
+            return next(error);
+        }
+
+        return res.status(200).json({
+            status: 'success',
+
+            data: supervisor
+        });
+    }
+);
+
 // =====================================================
 // Activate Supervisor
 // Academy Admin
@@ -765,6 +843,9 @@ module.exports = {
 
     patchActiveSupervisor,
 
-    patchStopSupervisor
+    patchStopSupervisor,
 
+    getAllSupervisors,
+
+    getSingleSupervisor
 };
