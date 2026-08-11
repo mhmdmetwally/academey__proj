@@ -3,6 +3,9 @@ const express = require('express');
 const user_controller =
     require('../controllers/User');
 
+const validate_password =
+    require('../middleware/ValidatePassword');
+
 const router =
     express.Router();
 
@@ -11,8 +14,12 @@ const router =
 // Register
 // =====================================================
 
+
+
 router.route('/register')
     .post(
+        validate_password('password'),
+
         user_controller.register
     );
 

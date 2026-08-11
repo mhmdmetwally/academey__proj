@@ -7,6 +7,9 @@ const Academy =
 const Supervisor =
     require('../models/Supervisor');
 
+const User =
+    require('../models/User');
+
 const app_error =
     require('../utils/AppError');
 
@@ -583,6 +586,200 @@ const changePassword = AsyncWrapper(
 );
 
 
+// =====================================================
+// Create Supervisor
+// User must already exist
+// =====================================================
+
+const createSupervisor = AsyncWrapper(
+    async (req, res, next) => {
+
+        const academy_id =
+            req.user.id;
+
+        const {
+            phone
+        } = req.body;
+
+
+        // =================================================
+        // Validation
+        // =================================================
+
+        if (!phone) {
+
+            const error =
+                new app_error();
+
+            error.create(
+                'phone is required',
+                400,
+                http_status_text.FAIL
+            );
+
+            return next(error);
+        }
+
+
+        // =================================================
+        // Check Academy
+        // =================================================
+
+        const academy =
+            await Academy.findById(
+                academy_id
+            );
+
+        if (!academy) {
+
+            const error =
+                new app_error();
+
+            error.create(
+                'academy not found',
+                404,
+                http_status_text.FAIL
+            );
+
+            return next(error);
+        }
+
+
+        // =================================================
+        // Find Existing User
+        // =================================================
+
+        const user =
+            await User.findOne({
+                phone
+            });
+
+        if (!user) {
+
+            const error =
+                new app_error();
+
+            error.create(
+                'user does not exist. Please create a user account first',
+                404,
+                http_status_text.FAIL
+            );
+
+            return next(error);
+        }
+
+
+        // =================================================
+        // Check User Role
+        // =================================================
+
+        if (
+            user.role !==
+            'supervisor'
+        ) {
+
+            const error =
+                new app_error();
+
+            error.create(
+                'this user is not a supervisor',
+                400,
+                http_status_text.FAIL
+            );
+
+            return next(error);
+        }
+
+
+        // =================================================
+        // Check Already Added To This Academy
+        // =================================================
+
+        const existing_supervisor =
+            await Supervisor.findOne({
+
+                user:
+                    user._id,
+
+                academy_id
+
+            });
+
+        if (existing_supervisor) {
+
+            const error =
+                new app_error();
+
+            error.create(
+                'this supervisor is already added to this academy',
+                409,
+                http_status_text.FAIL
+            );
+
+            return next(error);
+        }
+
+
+        // =================================================
+        // Create Supervisor
+        // =================================================
+
+        const supervisor =
+            new Supervisor({
+
+                user:
+                    user._id,
+
+                academy_id,
+
+                is_active:
+                    true
+            });
+
+
+        await supervisor.save();
+
+
+        // =================================================
+        // Get Created Supervisor
+        // =================================================
+
+        const created_supervisor =
+            await Supervisor
+                .findById(
+                    supervisor._id
+                )
+                .populate(
+                    'user',
+                    'name phone role is_active'
+                );
+
+
+        // =================================================
+        // Response
+        // =================================================
+
+        return res.status(201).json({
+
+            status:
+                http_status_text.SUCCESS,
+
+            data: {
+
+                supervisor:
+                    created_supervisor
+
+            }
+
+        });
+
+    }
+);
+
+
+
+
+
 //=====================================================
 // get all supervisor
 // academy admin
@@ -840,6 +1037,8 @@ module.exports = {
     updateAcademy,
 
     changePassword,
+
+    createSupervisor,
 
     patchActiveSupervisor,
 

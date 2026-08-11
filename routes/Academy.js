@@ -5,6 +5,9 @@ const router = express.Router();
 const academy_controller =
     require('../controllers/Academy');
 
+const validate_password =
+    require('../middleware/ValidatePassword');
+    
 const allowed_tool =
     require('../middleware/AllowedTools');
 
@@ -21,6 +24,9 @@ const verify_token =
 
 router.post(
     '/register',
+
+    validate_password('password'),
+
     academy_controller.register
 );
 
@@ -72,6 +78,8 @@ router.patch(
         user_role.academy_admin
     ),
 
+    validate_password('new_password'),
+
     academy_controller.changePassword
 );
 
@@ -80,6 +88,21 @@ router.patch(
 // Supervisor Management
 // Academy Admin Only
 // =====================================================
+
+// Create Supervisor
+router.post(
+    '/supervisor',
+
+    verify_token,
+
+    allowed_tool(
+        user_role.academy_admin
+    ),
+
+    validate_password('password'),
+
+    academy_controller.createSupervisor
+);
 
 // Get All Supervisors
 router.get(
@@ -111,7 +134,7 @@ router.get(
 
 // Activate Supervisor
 router.patch(
-    '/supervisor/active/:supervisor_id',
+    '/supervisor/active',
 
     verify_token,
 
@@ -125,7 +148,7 @@ router.patch(
 
 // Stop Supervisor
 router.patch(
-    '/supervisor/stop/:supervisor_id',
+    '/supervisor/stop',
 
     verify_token,
 

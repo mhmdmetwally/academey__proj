@@ -33,26 +33,6 @@ const UserSchema = new mongoose.Schema({
     password: {
         type: String,
         required: true,
-
-        validate: {
-            validator: function(value) {
-
-                return validator.isStrongPassword(
-                    value,
-                    {
-                        minLength: 8,
-                        minLowercase: 1,
-                        minUppercase: 1,
-                        minNumbers: 1,
-                        minSymbols: 1
-                    }
-                );
-
-            },
-
-            message:
-                'كلمة المرور ضعيفة! يجب أن تحتوي على 8 أحرف تشمل (حرف كبير، حرف صغير، رقم، ورمز)'
-        }
     },
 
     role: {

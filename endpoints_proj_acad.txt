@@ -3,10 +3,10 @@ POST   /academy/login
 GET    /academy/me
 PATCH  /academy/me
 PATCH  /academy/change-password
-PATCH  /academy/supervisor/active/:supervisor_id
-PATCH  /academy/supervisor/stop/:supervisor_id
+PATCH  /academy/supervisor/active
+PATCH  /academy/supervisor/stop
 get  /academy/supervisor
-get  /academy/supervisor/:supervisor_id
+get  /academy/supervisor
 
 
 /user/register
