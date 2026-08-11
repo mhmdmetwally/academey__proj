@@ -2,7 +2,7 @@
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
-const bcrypt = require('bcrypt');
+
 const http_status_text =
     require('./utils/HttpStatusText');
 
@@ -33,8 +33,8 @@ const student_subject_routes =
 const lesson_routes =
     require('./routes/Lesson');
 
-const teacher_payroll_routes = 
-    require('./routes/TeacherPayroll')
+const teacher_payroll_routes =
+    require('./routes/TeacherPayroll');
 
 const invoice_routes =
     require('./routes/Invoice');
@@ -48,10 +48,69 @@ const expense_routes =
 const financial_report_routes =
     require('./routes/FinancialReport');
 
+
 const app = express();
 
-const url =
-    process.env.MONGO_URL;
+
+// =====================================================
+// MongoDB Connection
+// =====================================================
+
+let is_connected = false;
+
+const connectDB = async () => {
+
+    // Already connected
+    if (
+        is_connected &&
+        mongoose.connection.readyState === 1
+    ) {
+        return;
+    }
+
+    // Connection is already in progress
+    if (
+        mongoose.connection.readyState === 2
+    ) {
+        return;
+    }
+
+    const url =
+        process.env.MONGO_URL;
+
+    if (!url) {
+
+        console.error(
+            'MONGO_URL is not defined'
+        );
+
+        throw new Error(
+            'MONGO_URL is not defined'
+        );
+    }
+
+    try {
+
+        await mongoose.connect(url);
+
+        is_connected = true;
+
+        console.log(
+            'MongoDB connected'
+        );
+
+    } catch (error) {
+
+        is_connected = false;
+
+        console.error(
+            'MongoDB connection failed:',
+            error
+        );
+
+        throw error;
+    }
+};
 
 
 // =====================================================
@@ -64,29 +123,25 @@ app.use(express.json());
 
 
 // =====================================================
-// MongoDB
+// MongoDB Middleware
 // =====================================================
 
-console.log(
-    "MONGO =",
-    process.env.MONGO_URL
-);
+app.use(
+    async (req, res, next) => {
 
+        try {
 
-mongoose.connect(url)
+            await connectDB();
 
-    .then(() =>
-        console.log('db start')
-    )
+            next();
 
-    .catch((err) =>
-        console.error(err)
-    );
+        } catch (error) {
 
+            next(error);
 
-mongoose.set(
-    'debug',
-    true
+        }
+
+    }
 );
 
 
@@ -109,14 +164,15 @@ app.get("/", (req, res) => {
 
 app.get('/test', (req, res) => {
 
-    console.log(
-        "test route works"
-    );
-
     res.json({
 
         mongo:
             process.env.MONGO_URL
+                ? 'MONGO_URL exists'
+                : 'MONGO_URL missing',
+
+        mongo_state:
+            mongoose.connection.readyState
 
     });
 
@@ -149,17 +205,17 @@ app.use(
 
 app.use(
     '/student',
-     student_routes
+    student_routes
 );
 
 app.use(
     '/supervisor',
-     supervisor_routes
+    supervisor_routes
 );
 
 app.use(
     '/family',
-     family_routes
+    family_routes
 );
 
 app.use(
@@ -197,6 +253,7 @@ app.use(
     financial_report_routes
 );
 
+
 // =====================================================
 // 404
 // =====================================================
@@ -209,7 +266,7 @@ app.use((req, res) => {
             http_status_text.FAIL,
 
         msg:
-            "Not found"
+            'Not found'
 
     });
 
@@ -221,6 +278,11 @@ app.use((req, res) => {
 // =====================================================
 
 app.use((err, req, res, next) => {
+
+    console.error(
+        'ERROR:',
+        err
+    );
 
     res.status(
         err.status_code || 500

@@ -6,7 +6,7 @@ PATCH  /academy/change-password
 PATCH  /academy/supervisor/active
 PATCH  /academy/supervisor/stop
 get  /academy/supervisor/:supervisor_id
-
+get  /academy/supervisor
 
 /user/register
 /user/login
