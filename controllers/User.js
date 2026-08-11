@@ -1,6 +1,10 @@
 const http_status_text =
     require('../utils/HttpStatusText');
 
+
+const user_role =
+    require('../utils/UserRole');
+
 const gen_token =
     require('../utils/gen_token');
 
@@ -98,7 +102,10 @@ const register = AsyncWrapper(
 
 
         await user.save();
-
+        
+        if(user.role!==user_role.academy_admin){
+            user.is_active=true;
+        }
 
         const token =
             await gen_token({
