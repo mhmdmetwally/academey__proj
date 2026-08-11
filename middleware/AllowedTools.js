@@ -12,7 +12,7 @@ module.exports = (...allowedroles)=>{
                 new app_error();
 
             error.create(
-                'user is not active',
+                `${cur_role} is not active`,
                 403,
                 http_status_text.FAIL
             );
