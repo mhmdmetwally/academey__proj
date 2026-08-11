@@ -1,11 +1,8 @@
 const AsyncWrapper =
     require('../middleware/AsyncWrapper');
 
-const User =
-    require('../models/User');
-
-const StudentAssignment =
-    require('../models/StudentAssignment');
+const Family =
+    require('../models/Family');
 
 const app_error =
     require('../utils/AppError');
@@ -15,37 +12,35 @@ const http_status_text =
 
 
 // =====================================================
-// Get My Students
+// Create Family
+// Academy Admin / Supervisor
 // =====================================================
 
-const getMyStudents = AsyncWrapper(
+const createFamily = AsyncWrapper(
 
     async (req, res, next) => {
 
-        const family_id =
-            req.user.id;
+        const {
+            name,
+            phone
+        } = req.body;
 
 
-        const family =
-            await User.findOne({
+        // =================================================
+        // Validation
+        // =================================================
 
-                _id:
-                    family_id,
-
-                role:
-                    'family'
-
-            });
-
-
-        if (!family) {
+        if (
+            !name ||
+            !phone
+        ) {
 
             const error =
                 new app_error();
 
             error.create(
-                'family not found',
-                404,
+                'name and phone are required',
+                400,
                 http_status_text.FAIL
             );
 
@@ -53,136 +48,79 @@ const getMyStudents = AsyncWrapper(
         }
 
 
-        const students =
-            await StudentAssignment
-                .find({
+        // =================================================
+        // Check Existing Family
+        // Same Name + Same Phone
+        // =================================================
 
-                    family:
-                        family_id,
+        const existing_family =
+            await Family.findOne({
 
-                    is_active: true
+                name,
+                phone
 
-                })
-
-                .populate(
-                    'student'
-                )
-
-                .populate(
-                    'academy_id',
-                    'academy_name academy_code'
-                )
-
-                .populate({
-                    path: 'supervisor',
-                    populate: {
-                        path: 'user',
-                        select: 'name phone'
-                    }
-                });
+            });
 
 
-        return res.status(200).json({
+        if (existing_family) {
+
+            const error =
+                new app_error();
+
+            error.create(
+                'family with this name and phone already exists',
+                409,
+                http_status_text.FAIL
+            );
+
+            return next(error);
+        }
+
+
+        // =================================================
+        // Create Family
+        // =================================================
+
+        const family =
+            new Family({
+
+                name,
+
+                phone,
+
+                is_active:
+                    true
+
+            });
+
+
+        await family.save();
+
+
+        // =================================================
+        // Response
+        // =================================================
+
+        return res.status(201).json({
 
             status:
                 http_status_text.SUCCESS,
 
             data: {
 
-                students
+                family
 
             }
 
         });
 
     }
+
 );
-
-
-// =====================================================
-// Get Single Student
-// =====================================================
-
-const getSingleStudent =
-    AsyncWrapper(
-
-        async (req, res, next) => {
-
-            const family_id =
-                req.user.id;
-
-            const assignment_id =
-                req.params.student_id;
-
-
-            const student =
-                await StudentAssignment
-                    .findOne({
-
-                        _id:
-                            assignment_id,
-
-                        family:
-                            family_id,
-
-                        is_active: true
-
-                    })
-
-                    .populate(
-                        'student'
-                    )
-
-                    .populate(
-                        'academy_id',
-                        'academy_name academy_code'
-                    )
-
-                    .populate({
-                        path: 'supervisor',
-                        populate: {
-                            path: 'user',
-                            select: 'name phone'
-                        }
-                    });
-
-
-            if (!student) {
-
-                const error =
-                    new app_error();
-
-                error.create(
-                    'student not found or you are not allowed to access this student',
-                    404,
-                    http_status_text.FAIL
-                );
-
-                return next(error);
-            }
-
-
-            return res.status(200).json({
-
-                status:
-                    http_status_text.SUCCESS,
-
-                data: {
-
-                    student
-
-                }
-
-            });
-
-        }
-    );
 
 
 module.exports = {
 
-    getMyStudents,
-
-    getSingleStudent
+    createFamily
 
 };

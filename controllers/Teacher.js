@@ -1,13 +1,11 @@
-const bcrypt = require('bcrypt');
-
 const AsyncWrapper =
     require('../middleware/AsyncWrapper');
 
-const User =
-    require('../models/User');
-
 const Teacher =
     require('../models/Teacher');
+
+const TeacherAssignment =
+    require('../models/TeacherAssignment');
 
 const Supervisor =
     require('../models/Supervisor');
@@ -24,38 +22,45 @@ const http_status_text =
 const user_role =
     require('../utils/UserRole');
 
-const salt_round =
-    Number(process.env.salt_round);
+
+// =====================================================
+// Helper
+// =====================================================
+
+const getSupervisorAssignment =
+    async (user_id) => {
+
+        return await Supervisor.findOne({
+
+            user:
+                user_id,
+
+            is_active:
+                true
+
+        });
+    };
 
 
 // =====================================================
-// Create Teacher Assignment
-// Academy Admin
+// Create Teacher
+// Academy Admin OR Supervisor
 // =====================================================
 
 const createTeacher = AsyncWrapper(
-
     async (req, res, next) => {
 
         const {
             name,
             phone,
-            password,
             supervisor_id,
             price_per_lesson
         } = req.body;
 
 
-        // Academy Admin id = Academy id
-        const academy_id =
-            req.user.id;
-
-
         if (
             !name ||
             !phone ||
-            !password ||
-            !supervisor_id ||
             price_per_lesson === undefined
         ) {
 
@@ -63,7 +68,7 @@ const createTeacher = AsyncWrapper(
                 new app_error();
 
             error.create(
-                'name, phone, password, supervisor_id and price_per_lesson are required',
+                'name, phone and price_per_lesson are required',
                 400,
                 http_status_text.FAIL
             );
@@ -89,9 +94,105 @@ const createTeacher = AsyncWrapper(
         }
 
 
-        // =========================================
+        let academy_id;
+        let final_supervisor_id;
+
+
+        // =================================================
+        // Academy Admin
+        // =================================================
+
+        if (
+            req.user.role ===
+            user_role.academy_admin
+        ) {
+
+            academy_id =
+                req.user.id;
+
+
+            if (!supervisor_id) {
+
+                const error =
+                    new app_error();
+
+                error.create(
+                    'supervisor_id is required',
+                    400,
+                    http_status_text.FAIL
+                );
+
+                return next(error);
+            }
+
+
+            final_supervisor_id =
+                supervisor_id;
+
+        }
+
+
+        // =================================================
+        // Supervisor
+        // =================================================
+
+        else if (
+            req.user.role ===
+            user_role.supervisor
+        ) {
+
+            const supervisor =
+                await getSupervisorAssignment(
+                    req.user.id
+                );
+
+
+            if (!supervisor) {
+
+                const error =
+                    new app_error();
+
+                error.create(
+                    'supervisor assignment not found',
+                    404,
+                    http_status_text.FAIL
+                );
+
+                return next(error);
+            }
+
+
+            academy_id =
+                supervisor.academy_id;
+
+            final_supervisor_id =
+                supervisor._id;
+
+        }
+
+
+        // =================================================
+        // Invalid Role
+        // =================================================
+
+        else {
+
+            const error =
+                new app_error();
+
+            error.create(
+                'you are not allowed to create a teacher',
+                403,
+                http_status_text.FAIL
+            );
+
+            return next(error);
+        }
+
+
+        // =================================================
         // Check Academy
-        // =========================================
+        // =================================================
 
         const academy =
             await Academy.findById(
@@ -114,22 +215,20 @@ const createTeacher = AsyncWrapper(
         }
 
 
-        // =========================================
+        // =================================================
         // Check Supervisor
-        // =========================================
-        // supervisor_id here is Supervisor assignment id
-        // NOT User id.
-        // =========================================
+        // =================================================
 
         const supervisor =
             await Supervisor.findOne({
 
                 _id:
-                    supervisor_id,
+                    final_supervisor_id,
 
                 academy_id,
 
-                is_active: true
+                is_active:
+                    true
 
             });
 
@@ -149,94 +248,65 @@ const createTeacher = AsyncWrapper(
         }
 
 
-        // =========================================
-        // Find User by phone
-        // =========================================
+        // =================================================
+        // Find Teacher
+        // name + phone
+        // =================================================
 
-        let user =
-            await User.findOne({
-                phone
+        let teacher =
+            await Teacher.findOne({
+
+                name:
+                    name.trim(),
+
+                phone:
+                    phone.trim()
+
             });
 
 
-        // =========================================
-        // Existing User
-        // =========================================
+        // =================================================
+        // Create Teacher if not exists
+        // =================================================
 
-        if (user) {
+        if (!teacher) {
 
-            if (
-                user.role !==
-                user_role.teacher
-            ) {
+            teacher =
+                new Teacher({
 
-                const error =
-                    new app_error();
+                    name:
+                        name.trim(),
 
-                error.create(
-                    'this phone already belongs to another user role',
-                    409,
-                    http_status_text.FAIL
-                );
+                    phone:
+                        phone.trim(),
 
-                return next(error);
-            }
-
-        }
-
-
-        // =========================================
-        // Create User
-        // =========================================
-
-        if (!user) {
-
-            const hashed_password =
-                await bcrypt.hash(
-                    password,
-                    salt_round
-                );
-
-
-            user =
-                new User({
-
-                    name,
-
-                    phone,
-
-                    password:
-                        hashed_password,
-
-                    role:
-                        user_role.teacher,
-
-                    is_active: true
+                    is_active:
+                        true
 
                 });
 
 
-            await user.save();
+            await teacher.save();
 
         }
 
 
-        // =========================================
-        // Check existing Teacher assignment
-        // =========================================
+        // =================================================
+        // Check Teacher in Academy
+        // =================================================
 
-        const existing_teacher =
-            await Teacher.findOne({
+        const existing_assignment =
+            await TeacherAssignment.findOne({
 
-                user:
-                    user._id,
+                teacher:
+                    teacher._id,
 
                 academy_id
 
             });
 
 
-        if (existing_teacher) {
+        if (existing_assignment) {
 
             const error =
                 new app_error();
@@ -251,15 +321,15 @@ const createTeacher = AsyncWrapper(
         }
 
 
-        // =========================================
-        // Create Teacher
-        // =========================================
+        // =================================================
+        // Create Assignment
+        // =================================================
 
-        const teacher =
-            new Teacher({
+        const assignment =
+            new TeacherAssignment({
 
-                user:
-                    user._id,
+                teacher:
+                    teacher._id,
 
                 academy_id,
 
@@ -268,40 +338,42 @@ const createTeacher = AsyncWrapper(
 
                 price_per_lesson,
 
-                is_active: true
+                is_active:
+                    true
 
             });
 
 
-        await teacher.save();
+        await assignment.save();
 
 
-        // =========================================
-        // Return
-        // =========================================
+        // =================================================
+        // Result
+        // =================================================
 
-        const teacher_data =
-            await Teacher.findById(
-                teacher._id
-            )
+        const result =
+            await TeacherAssignment
+                .findById(
+                    assignment._id
+                )
 
-            .populate(
-                'user',
-                'name phone role'
-            )
+                .populate(
+                    'teacher',
+                    'name phone is_active'
+                )
 
-            .populate({
-                path: 'supervisor',
-                populate: {
-                    path: 'user',
-                    select: 'name phone'
-                }
-            })
+                .populate(
+                    'academy_id',
+                    'academy_name academy_code'
+                )
 
-            .populate(
-                'academy_id',
-                'academy_name academy_code'
-            );
+                .populate({
+                    path: 'supervisor',
+                    populate: {
+                        path: 'user',
+                        select: 'name phone'
+                    }
+                });
 
 
         return res.status(201).json({
@@ -311,8 +383,8 @@ const createTeacher = AsyncWrapper(
 
             data: {
 
-                teacher:
-                    teacher_data
+                assignment:
+                    result
 
             }
 
@@ -327,24 +399,12 @@ const createTeacher = AsyncWrapper(
 // =====================================================
 
 const getMyTeachers = AsyncWrapper(
-
     async (req, res, next) => {
 
-        // req.user.id = User id
-        const user_id =
-            req.user.id;
-
-
-        // Find Supervisor assignment
         const supervisor =
-            await Supervisor.findOne({
-
-                user:
-                    user_id,
-
-                is_active: true
-
-            });
+            await getSupervisorAssignment(
+                req.user.id
+            );
 
 
         if (!supervisor) {
@@ -363,31 +423,33 @@ const getMyTeachers = AsyncWrapper(
 
 
         const teachers =
-            await Teacher.find({
+            await TeacherAssignment
+                .find({
 
-                academy_id:
-                    supervisor.academy_id,
+                    academy_id:
+                        supervisor.academy_id,
 
-                supervisor:
-                    supervisor._id
+                    supervisor:
+                        supervisor._id,
 
-            })
+                    is_active:
+                        true
 
-            .populate(
-                'user',
-                'name phone is_active'
-            )
+                })
 
-            .populate(
-                'academy_id',
-                'academy_name academy_code'
-            );
+                .populate(
+                    'teacher',
+                    'name phone is_active'
+                );
 
 
         return res.status(200).json({
 
             status:
                 http_status_text.SUCCESS,
+
+            results:
+                teachers.length,
 
             data: {
 
@@ -398,7 +460,6 @@ const getMyTeachers = AsyncWrapper(
         });
 
     }
-
 );
 
 
@@ -407,22 +468,12 @@ const getMyTeachers = AsyncWrapper(
 // =====================================================
 
 const getSingleTeacher = AsyncWrapper(
-
     async (req, res, next) => {
 
-        const teacher_id =
-            req.params.teacher_id;
-
-
         const supervisor =
-            await Supervisor.findOne({
-
-                user:
-                    req.user.id,
-
-                is_active: true
-
-            });
+            await getSupervisorAssignment(
+                req.user.id
+            );
 
 
         if (!supervisor) {
@@ -441,28 +492,27 @@ const getSingleTeacher = AsyncWrapper(
 
 
         const teacher =
-            await Teacher.findOne({
+            await TeacherAssignment
+                .findOne({
 
-                _id:
-                    teacher_id,
+                    _id:
+                        req.params.teacher_id,
 
-                academy_id:
-                    supervisor.academy_id,
+                    academy_id:
+                        supervisor.academy_id,
 
-                supervisor:
-                    supervisor._id
+                    supervisor:
+                        supervisor._id,
 
-            })
+                    is_active:
+                        true
 
-            .populate(
-                'user',
-                'name phone is_active'
-            )
+                })
 
-            .populate(
-                'academy_id',
-                'academy_name academy_code'
-            );
+                .populate(
+                    'teacher',
+                    'name phone is_active'
+                );
 
 
         if (!teacher) {
@@ -494,171 +544,43 @@ const getSingleTeacher = AsyncWrapper(
         });
 
     }
-
 );
 
 
 // =====================================================
-// Update Teacher
-// Academy Admin
+// Academy Admin Gets Teachers
 // =====================================================
 
-const updateTeacher = AsyncWrapper(
-
+const getAcademyTeachers = AsyncWrapper(
     async (req, res, next) => {
-
-        const teacher_id =
-            req.params.teacher_id;
 
         const academy_id =
             req.user.id;
 
 
-        const teacher =
-            await Teacher.findOne({
-
-                _id:
-                    teacher_id,
-
-                academy_id
-
-            });
-
-
-        if (!teacher) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'teacher not found in this academy',
-                404,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-        }
-
-
-        const {
-            supervisor_id,
-            price_per_lesson,
-            is_active
-        } = req.body;
-
-
-        // =========================================
-        // Supervisor
-        // =========================================
-
-        if (supervisor_id) {
-
-            const supervisor =
-                await Supervisor.findOne({
-
-                    _id:
-                        supervisor_id,
+        const teachers =
+            await TeacherAssignment
+                .find({
 
                     academy_id,
 
-                    is_active: true
+                    is_active:
+                        true
 
+                })
+
+                .populate(
+                    'teacher',
+                    'name phone is_active'
+                )
+
+                .populate({
+                    path: 'supervisor',
+                    populate: {
+                        path: 'user',
+                        select: 'name phone'
+                    }
                 });
-
-
-            if (!supervisor) {
-
-                const error =
-                    new app_error();
-
-                error.create(
-                    'supervisor does not belong to this academy',
-                    400,
-                    http_status_text.FAIL
-                );
-
-                return next(error);
-            }
-
-
-            teacher.supervisor =
-                supervisor._id;
-
-        }
-
-
-        // =========================================
-        // Price
-        // =========================================
-
-        if (
-            price_per_lesson !==
-            undefined
-        ) {
-
-            if (
-                price_per_lesson < 0
-            ) {
-
-                const error =
-                    new app_error();
-
-                error.create(
-                    'price_per_lesson cannot be negative',
-                    400,
-                    http_status_text.FAIL
-                );
-
-                return next(error);
-            }
-
-
-            teacher.price_per_lesson =
-                price_per_lesson;
-
-        }
-
-
-        // =========================================
-        // Active
-        // =========================================
-
-        if (
-            is_active !==
-            undefined
-        ) {
-
-            teacher.is_active =
-                is_active;
-
-        }
-
-
-        await teacher.save();
-
-
-        const updated_teacher =
-            await Teacher.findById(
-                teacher._id
-            )
-
-            .populate(
-                'user',
-                'name phone is_active'
-            )
-
-            .populate({
-                path: 'supervisor',
-                populate: {
-                    path: 'user',
-                    select: 'name phone'
-                }
-            })
-
-            .populate(
-                'academy_id',
-                'academy_name academy_code'
-            );
 
 
         return res.status(200).json({
@@ -666,71 +588,311 @@ const updateTeacher = AsyncWrapper(
             status:
                 http_status_text.SUCCESS,
 
+            results:
+                teachers.length,
+
             data: {
 
-                teacher:
-                    updated_teacher
+                teachers
 
             }
 
         });
 
     }
-
 );
+
+
+// =====================================================
+// Academy Admin Gets Single Teacher
+// =====================================================
+
+const getAcademySingleTeacher =
+    AsyncWrapper(
+        async (req, res, next) => {
+
+            const academy_id =
+                req.user.id;
+
+
+            const teacher =
+                await TeacherAssignment
+                    .findOne({
+
+                        _id:
+                            req.params.teacher_id,
+
+                        academy_id
+
+                    })
+
+                    .populate(
+                        'teacher',
+                        'name phone is_active'
+                    )
+
+                    .populate({
+                        path: 'supervisor',
+                        populate: {
+                            path: 'user',
+                            select: 'name phone'
+                        }
+                    });
+
+
+            if (!teacher) {
+
+                const error =
+                    new app_error();
+
+                error.create(
+                    'teacher not found in this academy',
+                    404,
+                    http_status_text.FAIL
+                );
+
+                return next(error);
+            }
+
+
+            return res.status(200).json({
+
+                status:
+                    http_status_text.SUCCESS,
+
+                data: {
+
+                    teacher
+
+                }
+
+            });
+
+        }
+    );
+
+
+// =====================================================
+// Update Teacher Assignment
+// Academy Admin
+// =====================================================
+
+const updateTeacher =
+    AsyncWrapper(
+        async (req, res, next) => {
+
+            const academy_id =
+                req.user.id;
+
+            const assignment_id =
+                req.params.teacher_id;
+
+
+            const {
+                supervisor_id,
+                price_per_lesson,
+                is_active
+            } = req.body;
+
+
+            const assignment =
+                await TeacherAssignment.findOne({
+
+                    _id:
+                        assignment_id,
+
+                    academy_id
+
+                });
+
+
+            if (!assignment) {
+
+                const error =
+                    new app_error();
+
+                error.create(
+                    'teacher not found in this academy',
+                    404,
+                    http_status_text.FAIL
+                );
+
+                return next(error);
+            }
+
+
+            // =========================================
+            // Supervisor
+            // =========================================
+
+            if (supervisor_id) {
+
+                const supervisor =
+                    await Supervisor.findOne({
+
+                        _id:
+                            supervisor_id,
+
+                        academy_id,
+
+                        is_active:
+                            true
+
+                    });
+
+
+                if (!supervisor) {
+
+                    const error =
+                        new app_error();
+
+                    error.create(
+                        'supervisor does not belong to this academy',
+                        400,
+                        http_status_text.FAIL
+                    );
+
+                    return next(error);
+                }
+
+
+                assignment.supervisor =
+                    supervisor._id;
+
+            }
+
+
+            // =========================================
+            // Price
+            // =========================================
+
+            if (
+                price_per_lesson !==
+                undefined
+            ) {
+
+                if (
+                    price_per_lesson < 0
+                ) {
+
+                    const error =
+                        new app_error();
+
+                    error.create(
+                        'price_per_lesson cannot be negative',
+                        400,
+                        http_status_text.FAIL
+                    );
+
+                    return next(error);
+                }
+
+
+                assignment.price_per_lesson =
+                    price_per_lesson;
+
+            }
+
+
+            // =========================================
+            // Active
+            // =========================================
+
+            if (
+                is_active !==
+                undefined
+            ) {
+
+                assignment.is_active =
+                    is_active;
+
+            }
+
+
+            await assignment.save();
+
+
+            const updated_teacher =
+                await TeacherAssignment
+                    .findById(
+                        assignment._id
+                    )
+
+                    .populate(
+                        'teacher',
+                        'name phone is_active'
+                    )
+
+                    .populate(
+                        'academy_id',
+                        'academy_name academy_code'
+                    )
+
+                    .populate({
+                        path: 'supervisor',
+                        populate: {
+                            path: 'user',
+                            select: 'name phone'
+                        }
+                    });
+
+
+            return res.status(200).json({
+
+                status:
+                    http_status_text.SUCCESS,
+
+                data: {
+
+                    assignment:
+                        updated_teacher
+
+                }
+
+            });
+
+        }
+    );
 
 
 // =====================================================
 // Teacher Gets His Academies
 // =====================================================
 
-const getTeacherAcademies = AsyncWrapper(
+const getTeacherAcademies =
+    AsyncWrapper(
+        async (req, res, next) => {
 
-    async (req, res, next) => {
-
-        const user_id =
-            req.user.id;
-
-
-        const teachers =
-            await Teacher.find({
-
-                user:
-                    user_id
-
-            })
-
-            .populate(
-                'academy_id',
-                'academy_name academy_code'
-            )
-
-            .populate({
-                path: 'supervisor',
-                populate: {
-                    path: 'user',
-                    select: 'name phone'
-                }
-            });
+            /*
+             * هنا مهم جدًا:
+             *
+             * Teacher لم يعد User
+             *
+             * لذلك req.user.id لا يمكن
+             * أن يكون Teacher id.
+             *
+             * لو أردت Teacher login لاحقًا
+             * ستحتاج طريقة authentication
+             * خاصة بالـ Teacher.
+             *
+             * لذلك هذا endpoint حاليًا
+             * لا يمكن استخدامه بالطريقة القديمة.
+             */
 
 
-        return res.status(200).json({
+            const error =
+                new app_error();
 
-            status:
-                http_status_text.SUCCESS,
+            error.create(
+                'teacher authentication is not implemented because teacher has no user account',
+                400,
+                http_status_text.FAIL
+            );
 
-            data: {
+            return next(error);
 
-                academies:
-                    teachers
-
-            }
-
-        });
-
-    }
-
-);
+        }
+    );
 
 
 module.exports = {
@@ -740,6 +902,10 @@ module.exports = {
     getMyTeachers,
 
     getSingleTeacher,
+
+    getAcademyTeachers,
+
+    getAcademySingleTeacher,
 
     updateTeacher,
 

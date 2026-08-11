@@ -19,7 +19,7 @@ const StudentAssignmentSchema = new mongoose.Schema({
     // الـ Family المسؤولة عن الطالب
     family: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
+        ref: 'Family',
         required: true
     },
 

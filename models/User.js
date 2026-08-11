@@ -41,9 +41,6 @@ const UserSchema = new mongoose.Schema({
         enum: [
             'super_admin',
             'supervisor',
-            'teacher',
-            'family',
-            'student'
         ],
 
         required: true

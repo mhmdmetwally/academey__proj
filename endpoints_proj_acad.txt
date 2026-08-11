@@ -5,8 +5,7 @@ PATCH  /academy/me
 PATCH  /academy/change-password
 PATCH  /academy/supervisor/active
 PATCH  /academy/supervisor/stop
-get  /academy/supervisor
-get  /academy/supervisor
+get  /academy/supervisor/:supervisor_id
 
 
 /user/register
@@ -18,6 +17,14 @@ GET    /admin/academy/singleacademy/:academy_id
 PATCH  /admin/academy/stop/:academy_id
 PATCH  /admin/academy/active/:academy_id
 
+
+POST   /student
+GET    /student
+GET    /student/my-academies
+GET    /student/:student_id
+PATCH  /student/:student_id
+
+POST   /family
 
 POST   /teacher
 GET    /teacher/my-teachers
@@ -41,7 +48,6 @@ GET    /student-subject/student/:student_assignment_id
 PATCH  /student-subject/:student_subject_id/teacher
 PATCH  /student-subject/:student_subject_id/price
 DELETE /student-subject/:student_subject_id
-
 
 POST   /lesson
 GET    /lesson

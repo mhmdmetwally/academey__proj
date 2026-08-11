@@ -118,7 +118,8 @@ router.get(
 
 // Get Single Supervisor
 router.get(
-    '/supervisor',
+    
+    '/supervisor/:supervisor_id',
 
     verify_token,
 

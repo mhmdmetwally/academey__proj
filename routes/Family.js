@@ -17,32 +17,25 @@ const verify_token =
     require('../middleware/VerifyToken');
 
 
-// Family gets all his students
+// =====================================================
+// Create Family
+// Academy Admin / Supervisor
+// =====================================================
 
-router.route('/my-students')
-    .get(
-        verify_token,
+router.post(
 
-        allowed_tool(
-            user_role.family
-        ),
+    '/',
 
-        family_controller.getMyStudents
-    );
+    verify_token,
 
+    allowed_tool(
+        user_role.academy_admin,
+        user_role.supervisor
+    ),
 
-// Family gets single student
+    family_controller.createFamily
 
-router.route('/student/:student_id')
-    .get(
-        verify_token,
-
-        allowed_tool(
-            user_role.family
-        ),
-
-        family_controller.getSingleStudent
-    );
+);
 
 
 module.exports =

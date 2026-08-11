@@ -1,16 +1,14 @@
-const bcrypt = require('bcrypt');
-
 const AsyncWrapper =
     require('../middleware/AsyncWrapper');
-
-const User =
-    require('../models/User');
 
 const Student =
     require('../models/Student');
 
 const StudentAssignment =
     require('../models/StudentAssignment');
+
+const User =
+    require('../models/User');
 
 const Supervisor =
     require('../models/Supervisor');
@@ -27,44 +25,46 @@ const http_status_text =
 const user_role =
     require('../utils/UserRole');
 
-const salt_round =
-    Number(process.env.salt_round);
+
+// =====================================================
+// Helper
+// Get Supervisor Assignment
+// =====================================================
+
+const getSupervisorAssignment =
+    async (user_id) => {
+
+        return await Supervisor.findOne({
+            user: user_id,
+            is_active: true
+        });
+    };
 
 
 // =====================================================
 // Create Student
-// Academy Admin
+// Academy Admin OR Supervisor
 // =====================================================
 
 const createStudent = AsyncWrapper(
-
     async (req, res, next) => {
-
-        const academy_id =
-            req.user.id;
 
         const {
             name,
-            phone,
-            password,
-            family_id,
-            supervisor_id
+            family_id
         } = req.body;
 
 
         if (
             !name ||
-            !phone ||
-            !password ||
-            !family_id ||
-            !supervisor_id
+            !family_id
         ) {
 
             const error =
                 new app_error();
 
             error.create(
-                'name, phone, password, family_id and supervisor_id are required',
+                'name and family_id are required',
                 400,
                 http_status_text.FAIL
             );
@@ -73,9 +73,105 @@ const createStudent = AsyncWrapper(
         }
 
 
-        // =========================================
+        let academy_id;
+        let supervisor_id;
+
+
+        // =================================================
+        // Academy Admin
+        // =================================================
+
+        if (
+            req.user.role ===
+            user_role.academy_admin
+        ) {
+
+            academy_id =
+                req.user.id;
+
+
+            supervisor_id =
+                req.body.supervisor_id;
+
+
+            if (!supervisor_id) {
+
+                const error =
+                    new app_error();
+
+                error.create(
+                    'supervisor_id is required',
+                    400,
+                    http_status_text.FAIL
+                );
+
+                return next(error);
+            }
+
+        }
+
+
+        // =================================================
+        // Supervisor
+        // =================================================
+
+        else if (
+            req.user.role ===
+            user_role.supervisor
+        ) {
+
+            const supervisor =
+                await getSupervisorAssignment(
+                    req.user.id
+                );
+
+
+            if (!supervisor) {
+
+                const error =
+                    new app_error();
+
+                error.create(
+                    'supervisor assignment not found',
+                    404,
+                    http_status_text.FAIL
+                );
+
+                return next(error);
+            }
+
+
+            academy_id =
+                supervisor.academy_id;
+
+            supervisor_id =
+                supervisor._id;
+
+        }
+
+
+        // =================================================
+        // Invalid Role
+        // =================================================
+
+        else {
+
+            const error =
+                new app_error();
+
+            error.create(
+                'you are not allowed to create a student',
+                403,
+                http_status_text.FAIL
+            );
+
+            return next(error);
+        }
+
+
+        // =================================================
         // Check Academy
-        // =========================================
+        // =================================================
 
         const academy =
             await Academy.findById(
@@ -97,9 +193,9 @@ const createStudent = AsyncWrapper(
         }
 
 
-        // =========================================
+        // =================================================
         // Check Supervisor
-        // =========================================
+        // =================================================
 
         const supervisor =
             await Supervisor.findOne({
@@ -128,9 +224,9 @@ const createStudent = AsyncWrapper(
         }
 
 
-        // =========================================
+        // =================================================
         // Check Family
-        // =========================================
+        // =================================================
 
         const family =
             await User.findOne({
@@ -158,103 +254,51 @@ const createStudent = AsyncWrapper(
         }
 
 
-        // =========================================
-        // Find Student User
-        // =========================================
-
-        let user =
-            await User.findOne({
-                phone
-            });
-
-
-        if (user) {
-
-            if (
-                user.role !==
-                user_role.student
-            ) {
-
-                const error =
-                    new app_error();
-
-                error.create(
-                    'this phone already belongs to another user role',
-                    409,
-                    http_status_text.FAIL
-                );
-
-                return next(error);
-            }
-
-        }
-
-
-        // =========================================
-        // Create User if doesn't exist
-        // =========================================
-
-        if (!user) {
-
-            const hashed_password =
-                await bcrypt.hash(
-                    password,
-                    salt_round
-                );
-
-            user =
-                new User({
-
-                    name,
-
-                    phone,
-
-                    password:
-                        hashed_password,
-
-                    role:
-                        user_role.student,
-
-                    is_active: true
-
-                });
-
-            await user.save();
-        }
-
-
-        // =========================================
-        // Find / Create Student
-        // =========================================
+        // =================================================
+        // Check Student
+        // Same name + same family
+        // =================================================
 
         let student =
             await Student.findOne({
 
-                user:
-                    user._id
+                name:
+                    name.trim(),
+
+                family:
+                    family._id
 
             });
 
+
+        // =================================================
+        // Create Student
+        // =================================================
 
         if (!student) {
 
             student =
                 new Student({
 
-                    user:
-                        user._id,
+                    name:
+                        name.trim(),
 
-                    is_active: true
+                    family:
+                        family._id,
+
+                    is_active:
+                        true
 
                 });
 
             await student.save();
+
         }
 
 
-        // =========================================
-        // Check if already in Academy
-        // =========================================
+        // =================================================
+        // Check Student in this Academy
+        // =================================================
 
         const existing_assignment =
             await StudentAssignment.findOne({
@@ -282,9 +326,9 @@ const createStudent = AsyncWrapper(
         }
 
 
-        // =========================================
+        // =================================================
         // Create Assignment
-        // =========================================
+        // =================================================
 
         const assignment =
             new StudentAssignment({
@@ -294,22 +338,24 @@ const createStudent = AsyncWrapper(
 
                 academy_id,
 
-                supervisor:
-                    supervisor._id,
-
                 family:
                     family._id,
 
-                is_active: true
+                supervisor:
+                    supervisor._id,
+
+                is_active:
+                    true
 
             });
+
 
         await assignment.save();
 
 
-        // =========================================
-        // Populate Result
-        // =========================================
+        // =================================================
+        // Return
+        // =================================================
 
         const result =
             await StudentAssignment
@@ -318,7 +364,8 @@ const createStudent = AsyncWrapper(
                 )
 
                 .populate(
-                    'student'
+                    'student',
+                    'name family is_active'
                 )
 
                 .populate(
@@ -359,11 +406,10 @@ const createStudent = AsyncWrapper(
 
 
 // =====================================================
-// Academy Admin Gets Students
+// Academy Gets Students
 // =====================================================
 
 const getAcademyStudents = AsyncWrapper(
-
     async (req, res, next) => {
 
         const academy_id =
@@ -373,15 +419,13 @@ const getAcademyStudents = AsyncWrapper(
         const students =
             await StudentAssignment
                 .find({
-
                     academy_id,
-
                     is_active: true
-
                 })
 
                 .populate(
-                    'student'
+                    'student',
+                    'name family is_active'
                 )
 
                 .populate({
@@ -403,6 +447,9 @@ const getAcademyStudents = AsyncWrapper(
             status:
                 http_status_text.SUCCESS,
 
+            results:
+                students.length,
+
             data: {
 
                 students
@@ -416,18 +463,16 @@ const getAcademyStudents = AsyncWrapper(
 
 
 // =====================================================
-// Get Single Student in Academy
-// Academy Admin
+// Academy Gets Single Student
 // =====================================================
 
 const getSingleStudent = AsyncWrapper(
-
     async (req, res, next) => {
 
         const academy_id =
             req.user.id;
 
-        const student_id =
+        const assignment_id =
             req.params.student_id;
 
 
@@ -436,14 +481,15 @@ const getSingleStudent = AsyncWrapper(
                 .findOne({
 
                     _id:
-                        student_id,
+                        assignment_id,
 
                     academy_id
 
                 })
 
                 .populate(
-                    'student'
+                    'student',
+                    'name family is_active'
                 )
 
                 .populate({
@@ -493,22 +539,181 @@ const getSingleStudent = AsyncWrapper(
 
 
 // =====================================================
+// Supervisor Gets His Students
+// =====================================================
+
+const getMyStudents = AsyncWrapper(
+    async (req, res, next) => {
+
+        const supervisor =
+            await getSupervisorAssignment(
+                req.user.id
+            );
+
+
+        if (!supervisor) {
+
+            const error =
+                new app_error();
+
+            error.create(
+                'supervisor assignment not found',
+                404,
+                http_status_text.FAIL
+            );
+
+            return next(error);
+        }
+
+
+        const students =
+            await StudentAssignment
+                .find({
+
+                    academy_id:
+                        supervisor.academy_id,
+
+                    supervisor:
+                        supervisor._id,
+
+                    is_active:
+                        true
+
+                })
+
+                .populate(
+                    'student',
+                    'name family is_active'
+                )
+
+                .populate(
+                    'family',
+                    'name phone'
+                );
+
+
+        return res.status(200).json({
+
+            status:
+                http_status_text.SUCCESS,
+
+            results:
+                students.length,
+
+            data: {
+
+                students
+
+            }
+
+        });
+
+    }
+);
+
+
+// =====================================================
+// Supervisor Gets Single Student
+// =====================================================
+
+const getSupervisorStudent = AsyncWrapper(
+    async (req, res, next) => {
+
+        const supervisor =
+            await getSupervisorAssignment(
+                req.user.id
+            );
+
+
+        if (!supervisor) {
+
+            const error =
+                new app_error();
+
+            error.create(
+                'supervisor assignment not found',
+                404,
+                http_status_text.FAIL
+            );
+
+            return next(error);
+        }
+
+
+        const assignment =
+            await StudentAssignment
+                .findOne({
+
+                    _id:
+                        req.params.student_id,
+
+                    academy_id:
+                        supervisor.academy_id,
+
+                    supervisor:
+                        supervisor._id,
+
+                    is_active:
+                        true
+
+                })
+
+                .populate(
+                    'student',
+                    'name family is_active'
+                )
+
+                .populate(
+                    'family',
+                    'name phone'
+                );
+
+
+        if (!assignment) {
+
+            const error =
+                new app_error();
+
+            error.create(
+                'student not found or you are not allowed to access this student',
+                404,
+                http_status_text.FAIL
+            );
+
+            return next(error);
+        }
+
+
+        return res.status(200).json({
+
+            status:
+                http_status_text.SUCCESS,
+
+            data: {
+
+                student:
+                    assignment
+
+            }
+
+        });
+
+    }
+);
+
+
+// =====================================================
 // Student Gets His Academies
 // =====================================================
 
 const getMyAcademies = AsyncWrapper(
-
     async (req, res, next) => {
-
-        const user_id =
-            req.user.id;
-
 
         const student =
             await Student.findOne({
 
-                user:
-                    user_id
+                _id:
+                    req.user.id
 
             });
 
@@ -535,7 +740,8 @@ const getMyAcademies = AsyncWrapper(
                     student:
                         student._id,
 
-                    is_active: true
+                    is_active:
+                        true
 
                 })
 
@@ -550,12 +756,7 @@ const getMyAcademies = AsyncWrapper(
                         path: 'user',
                         select: 'name phone'
                     }
-                })
-
-                .populate(
-                    'family',
-                    'name phone'
-                );
+                });
 
 
         return res.status(200).json({
@@ -581,42 +782,113 @@ const getMyAcademies = AsyncWrapper(
 // Academy Admin
 // =====================================================
 
-const updateStudentAssignment =
-    AsyncWrapper(
+const updateStudentAssignment = AsyncWrapper(
+    async (req, res, next) => {
 
-        async (req, res, next) => {
+        const academy_id =
+            req.user.id;
 
-            const academy_id =
-                req.user.id;
+        const assignment_id =
+            req.params.student_id;
 
-            const student_id =
-                req.params.student_id;
-
-            const {
-                supervisor_id,
-                family_id,
-                is_active
-            } = req.body;
+        const {
+            supervisor_id,
+            family_id,
+            is_active
+        } = req.body;
 
 
-            const assignment =
-                await StudentAssignment.findOne({
+        const assignment =
+            await StudentAssignment.findOne({
+
+                _id:
+                    assignment_id,
+
+                academy_id
+
+            });
+
+
+        if (!assignment) {
+
+            const error =
+                new app_error();
+
+            error.create(
+                'student not found in this academy',
+                404,
+                http_status_text.FAIL
+            );
+
+            return next(error);
+        }
+
+
+        // =============================================
+        // Supervisor
+        // =============================================
+
+        if (supervisor_id) {
+
+            const supervisor =
+                await Supervisor.findOne({
 
                     _id:
-                        student_id,
+                        supervisor_id,
 
-                    academy_id
+                    academy_id,
+
+                    is_active:
+                        true
 
                 });
 
 
-            if (!assignment) {
+            if (!supervisor) {
 
                 const error =
                     new app_error();
 
                 error.create(
-                    'student not found in this academy',
+                    'supervisor does not belong to this academy',
+                    400,
+                    http_status_text.FAIL
+                );
+
+                return next(error);
+            }
+
+
+            assignment.supervisor =
+                supervisor._id;
+        }
+
+
+        // =============================================
+        // Family
+        // =============================================
+
+        if (family_id) {
+
+            const family =
+                await User.findOne({
+
+                    _id:
+                        family_id,
+
+                    role:
+                        user_role.family
+
+                });
+
+
+            if (!family) {
+
+                const error =
+                    new app_error();
+
+                error.create(
+                    'family not found',
                     404,
                     http_status_text.FAIL
                 );
@@ -625,115 +897,55 @@ const updateStudentAssignment =
             }
 
 
-            // =====================================
-            // Supervisor
-            // =====================================
-
-            if (supervisor_id) {
-
-                const supervisor =
-                    await Supervisor.findOne({
-
-                        _id:
-                            supervisor_id,
-
-                        academy_id,
-
-                        is_active: true
-
-                    });
+            assignment.family =
+                family._id;
 
 
-                if (!supervisor) {
+            // Student belongs to Family
+            // too, so update Student.family
 
-                    const error =
-                        new app_error();
-
-                    error.create(
-                        'supervisor does not belong to this academy',
-                        400,
-                        http_status_text.FAIL
-                    );
-
-                    return next(error);
+            await Student.findByIdAndUpdate(
+                assignment.student,
+                {
+                    family:
+                        family._id
                 }
+            );
+        }
 
 
-                assignment.supervisor =
-                    supervisor._id;
-            }
+        // =============================================
+        // Active
+        // =============================================
 
+        if (
+            is_active !== undefined
+        ) {
 
-            // =====================================
-            // Family
-            // =====================================
-
-            if (family_id) {
-
-                const family =
-                    await User.findOne({
-
-                        _id:
-                            family_id,
-
-                        role:
-                            user_role.family
-
-                    });
-
-
-                if (!family) {
-
-                    const error =
-                        new app_error();
-
-                    error.create(
-                        'family not found',
-                        404,
-                        http_status_text.FAIL
-                    );
-
-                    return next(error);
-                }
-
-
-                assignment.family =
-                    family._id;
-            }
-
-
-            // =====================================
-            // Active
-            // =====================================
-
-            if (
-                is_active !==
-                undefined
-            ) {
-
-                assignment.is_active =
-                    is_active;
-            }
-
-
-            await assignment.save();
-
-
-            return res.status(200).json({
-
-                status:
-                    http_status_text.SUCCESS,
-
-                data: {
-
-                    assignment
-
-                }
-
-            });
+            assignment.is_active =
+                is_active;
 
         }
-    );
+
+
+        await assignment.save();
+
+
+        return res.status(200).json({
+
+            status:
+                http_status_text.SUCCESS,
+
+            data: {
+
+                assignment
+
+            }
+
+        });
+
+    }
+);
 
 
 module.exports = {
@@ -743,6 +955,10 @@ module.exports = {
     getAcademyStudents,
 
     getSingleStudent,
+
+    getMyStudents,
+
+    getSupervisorStudent,
 
     getMyAcademies,
 
