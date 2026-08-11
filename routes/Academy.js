@@ -99,8 +99,6 @@ router.post(
         user_role.academy_admin
     ),
 
-    validate_password('password'),
-
     academy_controller.createSupervisor
 );
 
@@ -120,7 +118,7 @@ router.get(
 
 // Get Single Supervisor
 router.get(
-    '/supervisor/:supervisor_id',
+    '/supervisor',
 
     verify_token,
 
