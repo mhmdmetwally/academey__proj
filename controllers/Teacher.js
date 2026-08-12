@@ -59,7 +59,6 @@ const createTeacher = AsyncWrapper(
             price_per_lesson
         } = req.body;
 
-        supervisor_id = supervisor_id.toString().trim();
         // =================================================
         // Input Validation
         // =================================================
@@ -89,7 +88,7 @@ const createTeacher = AsyncWrapper(
         }
 
 
-        let academy_id= req.user.id.toString().trim();
+        let academy_id;
         let final_supervisor_id;
 
 
@@ -99,35 +98,41 @@ const createTeacher = AsyncWrapper(
 
         if (req.user.role === user_role.academy_admin) {
 
-            if (!supervisor_id) {
-                const error = new app_error();
-                error.create(
-                    'supervisor_id is required',
-                    400,
-                    http_status_text.FAIL
-                );
-                return next(error);
-            }
+        academy_id = req.user.id.toString().trim();
 
-            // 🔒 فحص المشرف: التبعية للأكاديمية + حالة النشاط في استعلام واحد
-            const supervisorExists = await Supervisor.findOne({
-                _id: supervisor_id,
-                academy_id,
-                is_active: true
-            });
-            
-            if (!supervisorExists) {
-                const error = new app_error();
-                error.create(
-                    `${academy_id}${supervisor_id}supervisor does not exist, is inactive, or does not belong to this academy`,
-                    400,
-                    http_status_text.FAIL
-                );
-                return next(error);
-            }
-
-            final_supervisor_id = supervisor_id;
+        if (!supervisor_id) {
+            const error = new app_error();
+            error.create('supervisor_id is required', 400, http_status_text.FAIL);
+            return next(error);
         }
+
+        const clean_supervisor_id = supervisor_id.toString().trim();
+
+        // 1️⃣ فحص وجود المشرف بنفس الـ ID الأول
+        const supervisor = await Supervisor.findById(clean_supervisor_id);
+
+        if (!supervisor) {
+            const error = new app_error();
+            error.create(`[Debug] Supervisor ID (${clean_supervisor_id}) not found in Database! Check DB connection/Collection.`, 400, http_status_text.FAIL);
+            return next(error);
+        }
+
+        // 2️⃣ فحص تبعية المشرف للأكاديمية
+        if (supervisor.academy_id.toString() !== academy_id) {
+            const error = new app_error();
+            error.create(`[Debug] Supervisor belongs to Academy (${supervisor.academy_id}), but current admin is (${academy_id})`, 400, http_status_text.FAIL);
+            return next(error);
+        }
+
+        // 3️⃣ فحص حالة التفعيل
+        if (!supervisor.is_active) {
+            const error = new app_error();
+            error.create(`[Debug] Supervisor (${clean_supervisor_id}) is marked as inactive (is_active: false)`, 400, http_status_text.FAIL);
+            return next(error);
+        }
+
+        final_supervisor_id = clean_supervisor_id;
+    }
 
 
         // =================================================
