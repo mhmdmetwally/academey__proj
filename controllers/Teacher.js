@@ -59,7 +59,7 @@ const createTeacher = AsyncWrapper(
             price_per_lesson
         } = req.body;
 
-
+        supervisor_id = supervisor_id.toString().trim();
         // =================================================
         // Input Validation
         // =================================================
@@ -89,7 +89,7 @@ const createTeacher = AsyncWrapper(
         }
 
 
-        let academy_id;
+        let academy_id=academy_id = req.user.id.toString().trim();
         let final_supervisor_id;
 
 
@@ -98,8 +98,6 @@ const createTeacher = AsyncWrapper(
         // =================================================
 
         if (req.user.role === user_role.academy_admin) {
-
-            academy_id = req.user.id;
 
             if (!supervisor_id) {
                 const error = new app_error();
