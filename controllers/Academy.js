@@ -870,10 +870,8 @@ const patchActiveSupervisor = AsyncWrapper(
         const academy_id =
             req.user.id;
 
-
-        const {
-            supervisor_id
-        } = req.body;
+        const { supervisor_id } =
+            req.params;
 
 
         if (!supervisor_id) {
@@ -957,7 +955,7 @@ const patchStopSupervisor = AsyncWrapper(
 
         const {
             supervisor_id
-        } = req.body;
+        } = req.params;
 
 
         if (!supervisor_id) {

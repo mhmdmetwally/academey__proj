@@ -38,17 +38,6 @@ router.route('/my-teachers')
     );
 
 
-// Teacher gets his Academies
-router.route('/my-academies')
-    .get(
-        verify_token,
-        allowed_tool(
-            user_role.teacher
-        ),
-        teacher_controller.getTeacherAcademies
-    );
-
-
 // Supervisor gets single Teacher
 router.route('/:teacher_id')
     .get(

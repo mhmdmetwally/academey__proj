@@ -855,44 +855,7 @@ const updateTeacher =
     );
 
 
-// =====================================================
-// Teacher Gets His Academies
-// =====================================================
 
-const getTeacherAcademies =
-    AsyncWrapper(
-        async (req, res, next) => {
-
-            /*
-             * هنا مهم جدًا:
-             *
-             * Teacher لم يعد User
-             *
-             * لذلك req.user.id لا يمكن
-             * أن يكون Teacher id.
-             *
-             * لو أردت Teacher login لاحقًا
-             * ستحتاج طريقة authentication
-             * خاصة بالـ Teacher.
-             *
-             * لذلك هذا endpoint حاليًا
-             * لا يمكن استخدامه بالطريقة القديمة.
-             */
-
-
-            const error =
-                new app_error();
-
-            error.create(
-                'teacher authentication is not implemented because teacher has no user account',
-                400,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-
-        }
-    );
 
 
 module.exports = {
@@ -908,7 +871,5 @@ module.exports = {
     getAcademySingleTeacher,
 
     updateTeacher,
-
-    getTeacherAcademies
 
 };
