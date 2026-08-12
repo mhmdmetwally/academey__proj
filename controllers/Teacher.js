@@ -188,10 +188,26 @@ const createTeacher = AsyncWrapper(
         // =================================================
         // Find or Create Teacher (By Phone)
         // =================================================
+        
+        let teacher =
 
-        let teacher = await Teacher.findOne({
-            phone: phone.trim()
-        });
+            await Teacher.findOne({
+
+
+
+                name:
+
+                    name.trim(),
+
+
+
+                phone:
+
+                    phone.trim()
+
+
+
+            });
 
         if (!teacher) {
             teacher = new Teacher({
