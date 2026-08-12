@@ -133,7 +133,7 @@ router.get(
 
 // Activate Supervisor
 router.patch(
-    '/supervisor/active',
+    '/supervisor/active/:supervisor_id',
 
     verify_token,
 
@@ -147,7 +147,7 @@ router.patch(
 
 // Stop Supervisor
 router.patch(
-    '/supervisor/stop',
+    '/supervisor/stop/:supervisor_id',
 
     verify_token,
 
