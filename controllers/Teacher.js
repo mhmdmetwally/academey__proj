@@ -89,7 +89,7 @@ const createTeacher = AsyncWrapper(
         }
 
 
-        let academy_id=academy_id = req.user.id.toString().trim();
+        let academy_id= req.user.id.toString().trim();
         let final_supervisor_id;
 
 
