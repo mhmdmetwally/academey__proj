@@ -102,33 +102,37 @@ const createTeacher = AsyncWrapper(
         // Academy Admin
         // =================================================
 
-        if (
-            req.user.role ===
-            user_role.academy_admin
-        ) {
+        if (req.user.role === user_role.academy_admin) {
 
-            academy_id =
-                req.user.id;
-
+            academy_id = req.user.id;
 
             if (!supervisor_id) {
-
-                const error =
-                    new app_error();
-
+                const error = new app_error();
                 error.create(
                     'supervisor_id is required',
                     400,
                     http_status_text.FAIL
                 );
-
                 return next(error);
             }
 
+            // 🔒 التأكد من أن المشرف ينتمي بالفعل لهذه الأكاديمية (حماية الـ API)
+            const supervisorExists = await Supervisor.findOne({
+                _id: supervisor_id,
+                academy_id: academy_id
+            });
 
-            final_supervisor_id =
-                supervisor_id;
+            if (!supervisorExists) {
+                const error = new app_error();
+                error.create(
+                    'Selected supervisor does not belong to your academy',
+                    400,
+                    http_status_text.FAIL
+                );
+                return next(error);
+            }
 
+            final_supervisor_id = supervisor_id;
         }
 
 
