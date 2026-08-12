@@ -119,7 +119,7 @@ const createTeacher = AsyncWrapper(
             if (!supervisorExists) {
                 const error = new app_error();
                 error.create(
-                    `${academy_id} ${_id}  supervisor does not exist, is inactive, or does not belong to this academy`,
+                    `${academy_id} ${supervisor_id}  supervisor does not exist, is inactive, or does not belong to this academy`,
                     400,
                     http_status_text.FAIL
                 );
