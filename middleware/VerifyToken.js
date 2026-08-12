@@ -1,6 +1,8 @@
 const jwt =
     require('jsonwebtoken');
 
+const moongose = require('mongoose');
+
 const app_error =
     require('../utils/AppError');
 
