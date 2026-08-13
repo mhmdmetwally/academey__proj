@@ -12,8 +12,7 @@ const SubjectSchema = new mongoose.Schema(
         academy_id: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'Academy',
-            required:
-             true
+            required: true
         },
 
         // السعر الافتراضي للحصة في الأكاديمية
@@ -35,10 +34,13 @@ const SubjectSchema = new mongoose.Schema(
 );
 
 
+// =========================================
 // نفس المادة لا تتكرر داخل نفس الأكاديمية
+// =========================================
+
 SubjectSchema.index(
     {
-        academy: 1,
+        academy_id: 1,
         name: 1
     },
     {
