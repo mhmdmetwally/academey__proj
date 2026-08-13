@@ -27,6 +27,10 @@ const supervisor_routes =
 const family_routes =
     require('./routes/Family');
 
+
+const subject_routes =
+    require('./routes/Subject');
+
 const student_subject_routes =
     require('./routes/StudentSubject');
 
@@ -216,6 +220,11 @@ app.use(
 app.use(
     '/family',
     family_routes
+);
+
+app.use(
+    '/subject',
+    subject_routes
 );
 
 app.use(
