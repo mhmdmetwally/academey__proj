@@ -49,11 +49,12 @@ PATCH  /subject/:subject_id
 POST   /subject/:subject_id/teacher/:teacher_id
 DELETE /subject/:subject_id/teacher/:teacher_id
 
-
 POST   /student-subject/student/:student_assignment_id
 GET    /student-subject/student/:student_assignment_id
+
 PATCH  /student-subject/:student_subject_id/teacher
 PATCH  /student-subject/:student_subject_id/price
+PATCH  /student-subject/:student_subject_id/monthly-lessons
 DELETE /student-subject/:student_subject_id
 
 POST   /lesson

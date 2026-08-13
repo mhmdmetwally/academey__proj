@@ -83,6 +83,26 @@ router.route(
 );
 
 
+
+// =====================================================
+// Change Monthly Lessons
+// =====================================================
+
+router.route(
+    '/:student_subject_id/monthly-lessons'
+)
+.patch(
+    verify_token,
+
+    allowed_tool(
+        user_role.academy_admin,
+        user_role.supervisor
+    ),
+
+    student_subject_controller.changeMonthlyLessons
+);
+
+
 // =====================================================
 // Remove Subject From Student
 // =====================================================

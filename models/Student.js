@@ -10,7 +10,7 @@ const StudentSchema = new mongoose.Schema(
 
         family: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: 'User',
+            ref: 'Family',
             required: true
         },
 

@@ -1,266 +1,182 @@
 const AsyncWrapper =
     require('../middleware/AsyncWrapper');
 
+
 const StudentSubject =
     require('../models/StudentSubject');
+
 
 const StudentAssignment =
     require('../models/StudentAssignment');
 
+
 const Subject =
     require('../models/Subject');
+
 
 const TeacherAssignment =
     require('../models/TeacherAssignment');
 
+
 const app_error =
     require('../utils/AppError');
 
+
 const http_status_text =
     require('../utils/HttpStatusText');
+
 
 const {
     getAcademyId,
     getStudentAssignmentForUser,
     getTeacherAssignmentForUser
-} = require('../utils/AccessScope');
+} =
+    require('../utils/AccessScope');
+
+
+// =====================================================
+// Get YYYY-MM
+// =====================================================
+
+const getMonthString = (date = new Date()) => {
+
+    const year =
+        date.getFullYear();
+
+    const month =
+        String(
+            date.getMonth() + 1
+        ).padStart(2, '0');
+
+    return `${year}-${month}`;
+};
+
+
+// =====================================================
+// Validate Month
+// =====================================================
+
+const isValidMonth = (month) => {
+
+    return /^\d{4}-(0[1-9]|1[0-2])$/
+        .test(month);
+};
 
 
 // =====================================================
 // Add Subject To Student
 // =====================================================
 
-const addSubjectToStudent = AsyncWrapper(
+const addSubjectToStudent =
+    AsyncWrapper(
 
-    async (req, res, next) => {
+        async (req, res, next) => {
 
-        const academy_id =
-            getAcademyId(req);
+            const academy_id =
+                getAcademyId(req);
 
-        const student_assignment_id =
-            req.params.student_assignment_id;
 
-        const {
-            subject_id,
-            teacher_assignment_id,
-            price_per_lesson
-        } = req.body;
+            const student_assignment_id =
+                req.params.student_assignment_id;
 
 
-        // =========================================
-        // Validate required fields
-        // =========================================
+            const {
+                subject_id,
+                teacher_assignment_id,
+                price_per_lesson,
+                monthly_lessons,
+                note
+            } = req.body;
 
-        if (
-            !subject_id ||
-            !teacher_assignment_id ||
-            price_per_lesson === undefined
-        ) {
 
-            const error =
-                new app_error();
+            // =========================================
+            // Required
+            // =========================================
 
-            error.create(
-                'subject_id, teacher_assignment_id and price_per_lesson are required',
-                400,
-                http_status_text.FAIL
-            );
+            if (
+                !subject_id ||
+                !teacher_assignment_id ||
+                price_per_lesson === undefined ||
+                monthly_lessons === undefined
+            ) {
 
-            return next(error);
-        }
+                const error =
+                    new app_error();
 
+                error.create(
+                    'subject_id, teacher_assignment_id, price_per_lesson and monthly_lessons are required',
+                    400,
+                    http_status_text.FAIL
+                );
 
-        // =========================================
-        // Check Student Access
-        // =========================================
+                return next(error);
+            }
 
-        const studentAssignment =
-            await getStudentAssignmentForUser(
-                req,
-                student_assignment_id
-            );
 
+            // =========================================
+            // Validate monthly lessons
+            // =========================================
 
-        if (!studentAssignment) {
+            const monthlyLessons =
+                Number(monthly_lessons);
 
-            const error =
-                new app_error();
 
-            error.create(
-                'you cannot access this student',
-                403,
-                http_status_text.FAIL
-            );
+            if (
+                !Number.isInteger(monthlyLessons) ||
+                monthlyLessons < 0
+            ) {
 
-            return next(error);
-        }
+                const error =
+                    new app_error();
 
+                error.create(
+                    'monthly_lessons must be a non-negative integer',
+                    400,
+                    http_status_text.FAIL
+                );
 
-        // =========================================
-        // Check Subject
-        // =========================================
+                return next(error);
+            }
 
-        const subject =
-            await Subject.findOne({
 
-                _id:
-                    subject_id,
+            // =========================================
+            // Student Access
+            // =========================================
 
-                academy:
-                    academy_id,
+            const studentAssignment =
+                await getStudentAssignmentForUser(
+                    req,
+                    student_assignment_id
+                );
 
-                is_active: true
 
-            });
+            if (!studentAssignment) {
 
+                const error =
+                    new app_error();
 
-        if (!subject) {
+                error.create(
+                    'you cannot access this student',
+                    403,
+                    http_status_text.FAIL
+                );
 
-            const error =
-                new app_error();
+                return next(error);
+            }
 
-            error.create(
-                'subject not found',
-                404,
-                http_status_text.FAIL
-            );
 
-            return next(error);
-        }
+            // =========================================
+            // Subject
+            // =========================================
 
+            const subject =
+                await Subject.findOne({
 
-        // =========================================
-        // Check Teacher Access
-        // =========================================
+                    _id:
+                        subject_id,
 
-        const teacherAssignment =
-            await getTeacherAssignmentForUser(
-                req,
-                teacher_assignment_id
-            );
-
-
-        if (!teacherAssignment) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'you cannot access this teacher',
-                403,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-        }
-
-
-        // =========================================
-        // Check Teacher belongs to Subject
-        // =========================================
-
-        const teacherExists =
-            subject.teachers.some(
-
-                teacher_id =>
-                    String(teacher_id) ===
-                    String(teacherAssignment.teacher)
-
-            );
-
-
-        if (!teacherExists) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'this teacher is not assigned to this subject',
-                400,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-        }
-
-
-        // =========================================
-        // Validate Price
-        // =========================================
-
-        const price =
-            Number(price_per_lesson);
-
-
-        if (
-            Number.isNaN(price) ||
-            price < 0
-        ) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'price_per_lesson must be a valid non-negative number',
-                400,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-        }
-
-
-        // =========================================
-        // Check Duplicate
-        // =========================================
-
-        const existing =
-            await StudentSubject.findOne({
-
-                student_assignment:
-                    student_assignment_id,
-
-                subject:
-                    subject_id
-
-            });
-
-
-        if (existing) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'student already has this subject',
-                409,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-        }
-
-
-        // =========================================
-        // Create Student Subject
-        // =========================================
-
-        try {
-
-            const studentSubject =
-                await StudentSubject.create({
-
-                    student_assignment:
-                        studentAssignment._id,
-
-                    subject:
-                        subject._id,
-
-                    teacher:
-                        teacherAssignment._id,
-
-                    price_per_lesson:
-                        price,
+                    academy:
+                        academy_id,
 
                     is_active:
                         true
@@ -268,7 +184,469 @@ const addSubjectToStudent = AsyncWrapper(
                 });
 
 
-            return res.status(201).json({
+            if (!subject) {
+
+                const error =
+                    new app_error();
+
+                error.create(
+                    'subject not found',
+                    404,
+                    http_status_text.FAIL
+                );
+
+                return next(error);
+            }
+
+
+            // =========================================
+            // Teacher
+            // =========================================
+
+            const teacherAssignment =
+                await getTeacherAssignmentForUser(
+                    req,
+                    teacher_assignment_id
+                );
+
+
+            if (!teacherAssignment) {
+
+                const error =
+                    new app_error();
+
+                error.create(
+                    'you cannot access this teacher',
+                    403,
+                    http_status_text.FAIL
+                );
+
+                return next(error);
+            }
+
+
+            // =========================================
+            // Teacher belongs to Subject
+            // =========================================
+
+            const teacherExists =
+                subject.teachers.some(
+
+                    teacher_id =>
+                        String(teacher_id) ===
+                        String(
+                            teacherAssignment.teacher
+                        )
+
+                );
+
+
+            if (!teacherExists) {
+
+                const error =
+                    new app_error();
+
+                error.create(
+                    'this teacher is not assigned to this subject',
+                    400,
+                    http_status_text.FAIL
+                );
+
+                return next(error);
+            }
+
+
+            // =========================================
+            // Validate Price
+            // =========================================
+
+            const price =
+                Number(price_per_lesson);
+
+
+            if (
+                Number.isNaN(price) ||
+                price < 0
+            ) {
+
+                const error =
+                    new app_error();
+
+                error.create(
+                    'price_per_lesson must be a valid non-negative number',
+                    400,
+                    http_status_text.FAIL
+                );
+
+                return next(error);
+            }
+
+
+            // =========================================
+            // Duplicate
+            // =========================================
+
+            const existing =
+                await StudentSubject.findOne({
+
+                    student_assignment:
+                        student_assignment_id,
+
+                    subject:
+                        subject_id
+
+                });
+
+
+            if (existing) {
+
+                const error =
+                    new app_error();
+
+                error.create(
+                    'student already has this subject',
+                    409,
+                    http_status_text.FAIL
+                );
+
+                return next(error);
+            }
+
+
+            // =========================================
+            // Current Month
+            // =========================================
+
+            const currentMonth =
+                getMonthString();
+
+
+            // =========================================
+            // Create
+            // =========================================
+
+            try {
+
+                const studentSubject =
+                    await StudentSubject.create({
+
+                        academy_id,
+
+                        student_assignment:
+                            studentAssignment._id,
+
+                        subject:
+                            subject._id,
+
+                        teacher:
+                            teacherAssignment._id,
+
+                        price_per_lesson:
+                            price,
+
+                        monthly_lessons:
+                            monthlyLessons,
+
+                        monthly_lessons_history: [
+                            {
+                                month:
+                                    currentMonth,
+
+                                lessons:
+                                    monthlyLessons,
+
+                                note:
+                                    note || 'Initial monthly lessons'
+                            }
+                        ],
+
+                        is_active:
+                            true
+
+                    });
+
+
+                return res.status(201).json({
+
+                    status:
+                        http_status_text.SUCCESS,
+
+                    data: {
+                        studentSubject
+                    }
+
+                });
+
+            } catch (error) {
+
+                if (
+                    error.code === 11000
+                ) {
+
+                    const duplicateError =
+                        new app_error();
+
+                    duplicateError.create(
+                        'student already has this subject',
+                        409,
+                        http_status_text.FAIL
+                    );
+
+                    return next(
+                        duplicateError
+                    );
+                }
+
+                return next(error);
+            }
+
+        }
+    );
+
+
+// =====================================================
+// Get Student Subjects
+// =====================================================
+
+const getStudentSubjects =
+    AsyncWrapper(
+
+        async (req, res, next) => {
+
+            const student_assignment_id =
+                req.params.student_assignment_id;
+
+
+            const studentAssignment =
+                await getStudentAssignmentForUser(
+                    req,
+                    student_assignment_id
+                );
+
+
+            if (!studentAssignment) {
+
+                const error =
+                    new app_error();
+
+                error.create(
+                    'you cannot access this student',
+                    403,
+                    http_status_text.FAIL
+                );
+
+                return next(error);
+            }
+
+
+            const subjects =
+                await StudentSubject.find({
+
+                    student_assignment:
+                        studentAssignment._id,
+
+                    is_active:
+                        true
+
+                })
+
+                .populate(
+                    'subject'
+                )
+
+                .populate(
+                    'teacher'
+                )
+
+                .sort({
+                    createdAt: -1
+                });
+
+
+            return res.status(200).json({
+
+                status:
+                    http_status_text.SUCCESS,
+
+                data: {
+                    subjects
+                }
+
+            });
+
+        }
+    );
+
+
+// =====================================================
+// Change Teacher
+// =====================================================
+
+const changeStudentTeacher =
+    AsyncWrapper(
+
+        async (req, res, next) => {
+
+            const student_subject_id =
+                req.params.student_subject_id;
+
+
+            const {
+                teacher_assignment_id
+            } = req.body;
+
+
+            if (!teacher_assignment_id) {
+
+                const error =
+                    new app_error();
+
+                error.create(
+                    'teacher_assignment_id is required',
+                    400,
+                    http_status_text.FAIL
+                );
+
+                return next(error);
+            }
+
+
+            const studentSubject =
+                await StudentSubject.findOne({
+
+                    _id:
+                        student_subject_id,
+
+                    is_active:
+                        true
+
+                });
+
+
+            if (!studentSubject) {
+
+                const error =
+                    new app_error();
+
+                error.create(
+                    'student subject not found',
+                    404,
+                    http_status_text.FAIL
+                );
+
+                return next(error);
+            }
+
+
+            const studentAssignment =
+                await getStudentAssignmentForUser(
+                    req,
+                    studentSubject.student_assignment
+                );
+
+
+            if (!studentAssignment) {
+
+                const error =
+                    new app_error();
+
+                error.create(
+                    'you cannot access this student',
+                    403,
+                    http_status_text.FAIL
+                );
+
+                return next(error);
+            }
+
+
+            const teacherAssignment =
+                await getTeacherAssignmentForUser(
+                    req,
+                    teacher_assignment_id
+                );
+
+
+            if (!teacherAssignment) {
+
+                const error =
+                    new app_error();
+
+                error.create(
+                    'you cannot access this teacher',
+                    403,
+                    http_status_text.FAIL
+                );
+
+                return next(error);
+            }
+
+
+            const subject =
+                await Subject.findOne({
+
+                    _id:
+                        studentSubject.subject,
+
+                    academy:
+                        getAcademyId(req),
+
+                    is_active:
+                        true
+
+                });
+
+
+            if (!subject) {
+
+                const error =
+                    new app_error();
+
+                error.create(
+                    'subject not found',
+                    404,
+                    http_status_text.FAIL
+                );
+
+                return next(error);
+            }
+
+
+            const teacherExists =
+                subject.teachers.some(
+
+                    teacher_id =>
+                        String(teacher_id) ===
+                        String(
+                            teacherAssignment.teacher
+                        )
+
+                );
+
+
+            if (!teacherExists) {
+
+                const error =
+                    new app_error();
+
+                error.create(
+                    'this teacher is not assigned to this subject',
+                    400,
+                    http_status_text.FAIL
+                );
+
+                return next(error);
+            }
+
+
+            studentSubject.teacher =
+                teacherAssignment._id;
+
+
+            await studentSubject.save();
+
+
+            return res.status(200).json({
 
                 status:
                     http_status_text.SUCCESS,
@@ -279,546 +657,504 @@ const addSubjectToStudent = AsyncWrapper(
 
             });
 
-        } catch (error) {
-
-            if (
-                error.code === 11000
-            ) {
-
-                const duplicateError =
-                    new app_error();
-
-                duplicateError.create(
-                    'student already has this subject',
-                    409,
-                    http_status_text.FAIL
-                );
-
-                return next(
-                    duplicateError
-                );
-            }
-
-            return next(error);
         }
-
-    }
-);
-
-
-// =====================================================
-// Get Student Subjects
-// =====================================================
-
-const getStudentSubjects = AsyncWrapper(
-
-    async (req, res, next) => {
-
-        const student_assignment_id =
-            req.params.student_assignment_id;
-
-
-        // =========================================
-        // Check Student Access
-        // =========================================
-
-        const studentAssignment =
-            await getStudentAssignmentForUser(
-                req,
-                student_assignment_id
-            );
-
-
-        if (!studentAssignment) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'you cannot access this student',
-                403,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-        }
-
-
-        // =========================================
-        // Get Subjects
-        // =========================================
-
-        const subjects =
-            await StudentSubject.find({
-
-                student_assignment:
-                    studentAssignment._id,
-
-                is_active:
-                    true
-
-            })
-
-            .populate(
-                'subject'
-            )
-
-            .populate(
-                'teacher'
-            )
-
-            .sort({
-                createdAt: -1
-            });
-
-
-        return res.status(200).json({
-
-            status:
-                http_status_text.SUCCESS,
-
-            data: {
-                subjects
-            }
-
-        });
-
-    }
-);
-
-
-// =====================================================
-// Change Teacher
-// =====================================================
-
-const changeStudentTeacher = AsyncWrapper(
-
-    async (req, res, next) => {
-
-        const student_subject_id =
-            req.params.student_subject_id;
-
-        const {
-            teacher_assignment_id
-        } = req.body;
-
-
-        if (!teacher_assignment_id) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'teacher_assignment_id is required',
-                400,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-        }
-
-
-        // =========================================
-        // Get Student Subject
-        // =========================================
-
-        const studentSubject =
-            await StudentSubject.findOne({
-
-                _id:
-                    student_subject_id,
-
-                is_active:
-                    true
-
-            });
-
-
-        if (!studentSubject) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'student subject not found',
-                404,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-        }
-
-
-        // =========================================
-        // Check Student Access
-        // =========================================
-
-        const studentAssignment =
-            await getStudentAssignmentForUser(
-                req,
-                studentSubject.student_assignment
-            );
-
-
-        if (!studentAssignment) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'you cannot access this student',
-                403,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-        }
-
-
-        // =========================================
-        // Check Teacher Access
-        // =========================================
-
-        const teacherAssignment =
-            await getTeacherAssignmentForUser(
-                req,
-                teacher_assignment_id
-            );
-
-
-        if (!teacherAssignment) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'you cannot access this teacher',
-                403,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-        }
-
-
-        // =========================================
-        // Check Teacher belongs to Subject
-        // =========================================
-
-        const subject =
-            await Subject.findOne({
-
-                _id:
-                    studentSubject.subject,
-
-                academy:
-                    getAcademyId(req),
-
-                is_active:
-                    true
-
-            });
-
-
-        if (!subject) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'subject not found',
-                404,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-        }
-
-
-        const teacherExists =
-            subject.teachers.some(
-
-                teacher_id =>
-                    String(teacher_id) ===
-                    String(teacherAssignment.teacher)
-
-            );
-
-
-        if (!teacherExists) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'this teacher is not assigned to this subject',
-                400,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-        }
-
-
-        // =========================================
-        // Change Teacher
-        // =========================================
-
-        studentSubject.teacher =
-            teacherAssignment._id;
-
-
-        await studentSubject.save();
-
-
-        return res.status(200).json({
-
-            status:
-                http_status_text.SUCCESS,
-
-            data: {
-                studentSubject
-            }
-
-        });
-
-    }
-);
+    );
 
 
 // =====================================================
 // Change Student Price
 // =====================================================
 
-const changeStudentPrice = AsyncWrapper(
+const changeStudentPrice =
+    AsyncWrapper(
 
-    async (req, res, next) => {
+        async (req, res, next) => {
 
-        const student_subject_id =
-            req.params.student_subject_id;
-
-        const {
-            price_per_lesson
-        } = req.body;
+            const student_subject_id =
+                req.params.student_subject_id;
 
 
-        if (
-            price_per_lesson === undefined
-        ) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'price_per_lesson is required',
-                400,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-        }
+            const {
+                price_per_lesson
+            } = req.body;
 
 
-        const price =
-            Number(price_per_lesson);
+            if (
+                price_per_lesson === undefined
+            ) {
+
+                const error =
+                    new app_error();
+
+                error.create(
+                    'price_per_lesson is required',
+                    400,
+                    http_status_text.FAIL
+                );
+
+                return next(error);
+            }
 
 
-        if (
-            Number.isNaN(price) ||
-            price < 0
-        ) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'price_per_lesson must be a valid non-negative number',
-                400,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-        }
+            const price =
+                Number(price_per_lesson);
 
 
-        // =========================================
-        // Get Student Subject
-        // =========================================
+            if (
+                Number.isNaN(price) ||
+                price < 0
+            ) {
 
-        const studentSubject =
-            await StudentSubject.findOne({
+                const error =
+                    new app_error();
 
-                _id:
-                    student_subject_id,
+                error.create(
+                    'price_per_lesson must be a valid non-negative number',
+                    400,
+                    http_status_text.FAIL
+                );
 
-                is_active:
-                    true
+                return next(error);
+            }
+
+
+            const studentSubject =
+                await StudentSubject.findOne({
+
+                    _id:
+                        student_subject_id,
+
+                    is_active:
+                        true
+
+                });
+
+
+            if (!studentSubject) {
+
+                const error =
+                    new app_error();
+
+                error.create(
+                    'student subject not found',
+                    404,
+                    http_status_text.FAIL
+                );
+
+                return next(error);
+            }
+
+
+            const studentAssignment =
+                await getStudentAssignmentForUser(
+                    req,
+                    studentSubject.student_assignment
+                );
+
+
+            if (!studentAssignment) {
+
+                const error =
+                    new app_error();
+
+                error.create(
+                    'you cannot access this student',
+                    403,
+                    http_status_text.FAIL
+                );
+
+                return next(error);
+            }
+
+
+            studentSubject.price_per_lesson =
+                price;
+
+
+            await studentSubject.save();
+
+
+            return res.status(200).json({
+
+                status:
+                    http_status_text.SUCCESS,
+
+                data: {
+                    studentSubject
+                }
 
             });
 
-
-        if (!studentSubject) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'student subject not found',
-                404,
-                http_status_text.FAIL
-            );
-
-            return next(error);
         }
+    );
 
 
-        // =========================================
-        // Check Student Access
-        // =========================================
+// =====================================================
+// Change Monthly Lessons
+// =====================================================
 
-        const studentAssignment =
-            await getStudentAssignmentForUser(
-                req,
-                studentSubject.student_assignment
-            );
+const changeMonthlyLessons =
+    AsyncWrapper(
 
+        async (req, res, next) => {
 
-        if (!studentAssignment) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'you cannot access this student',
-                403,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-        }
+            const student_subject_id =
+                req.params.student_subject_id;
 
 
-        // =========================================
-        // Update Price
-        // =========================================
-
-        studentSubject.price_per_lesson =
-            price;
-
-
-        await studentSubject.save();
+            const {
+                monthly_lessons,
+                effective_month,
+                note
+            } = req.body;
 
 
-        return res.status(200).json({
+            // =========================================
+            // Required
+            // =========================================
 
-            status:
-                http_status_text.SUCCESS,
+            if (
+                monthly_lessons === undefined ||
+                !effective_month
+            ) {
 
-            data: {
-                studentSubject
+                const error =
+                    new app_error();
+
+                error.create(
+                    'monthly_lessons and effective_month are required',
+                    400,
+                    http_status_text.FAIL
+                );
+
+                return next(error);
             }
 
-        });
 
-    }
-);
+            // =========================================
+            // Validate lessons
+            // =========================================
 
-
-// =====================================================
-// Remove Subject From Student
-// =====================================================
-
-const removeSubjectFromStudent = AsyncWrapper(
-
-    async (req, res, next) => {
-
-        const student_subject_id =
-            req.params.student_subject_id;
+            const lessons =
+                Number(monthly_lessons);
 
 
-        const studentSubject =
-            await StudentSubject.findOne({
+            if (
+                !Number.isInteger(lessons) ||
+                lessons < 0
+            ) {
 
-                _id:
-                    student_subject_id,
+                const error =
+                    new app_error();
 
-                is_active:
-                    true
+                error.create(
+                    'monthly_lessons must be a non-negative integer',
+                    400,
+                    http_status_text.FAIL
+                );
+
+                return next(error);
+            }
+
+
+            // =========================================
+            // Validate month
+            // =========================================
+
+            if (
+                !isValidMonth(
+                    effective_month
+                )
+            ) {
+
+                const error =
+                    new app_error();
+
+                error.create(
+                    'effective_month must be in YYYY-MM format',
+                    400,
+                    http_status_text.FAIL
+                );
+
+                return next(error);
+            }
+
+
+            // =========================================
+            // Student Subject
+            // =========================================
+
+            const studentSubject =
+                await StudentSubject.findOne({
+
+                    _id:
+                        student_subject_id,
+
+                    is_active:
+                        true
+
+                });
+
+
+            if (!studentSubject) {
+
+                const error =
+                    new app_error();
+
+                error.create(
+                    'student subject not found',
+                    404,
+                    http_status_text.FAIL
+                );
+
+                return next(error);
+            }
+
+
+            // =========================================
+            // Access
+            // =========================================
+
+            const studentAssignment =
+                await getStudentAssignmentForUser(
+                    req,
+                    studentSubject.student_assignment
+                );
+
+
+            if (!studentAssignment) {
+
+                const error =
+                    new app_error();
+
+                error.create(
+                    'you cannot access this student',
+                    403,
+                    http_status_text.FAIL
+                );
+
+                return next(error);
+            }
+
+
+            // =========================================
+            // Check existing month
+            // =========================================
+
+            const existingIndex =
+                studentSubject
+                    .monthly_lessons_history
+                    .findIndex(
+
+                        item =>
+                            item.month ===
+                            effective_month
+
+                    );
+
+
+            // =========================================
+            // If month already exists
+            // =========================================
+
+            if (
+                existingIndex !== -1
+            ) {
+
+                const existing =
+                    studentSubject
+                        .monthly_lessons_history[
+                            existingIndex
+                        ];
+
+
+                existing.lessons =
+                    lessons;
+
+
+                existing.note =
+                    note || existing.note;
+
+            }
+
+            // =========================================
+            // New month
+            // =========================================
+
+            else {
+
+                studentSubject
+                    .monthly_lessons_history
+                    .push({
+
+                        month:
+                            effective_month,
+
+                        lessons,
+
+                        note:
+                            note || null
+
+                    });
+
+            }
+
+
+            // =========================================
+            // Update current value
+            // =========================================
+
+            const currentMonth =
+                getMonthString();
+
+
+            const currentHistory =
+                studentSubject
+                    .monthly_lessons_history
+                    .find(
+
+                        item =>
+                            item.month ===
+                            currentMonth
+
+                    );
+
+
+            if (currentHistory) {
+
+                studentSubject.monthly_lessons =
+                    currentHistory.lessons;
+
+            }
+
+
+            // =========================================
+            // Sort History
+            // =========================================
+
+            studentSubject
+                .monthly_lessons_history
+                .sort(
+
+                    (a, b) =>
+                        a.month.localeCompare(
+                            b.month
+                        )
+
+                );
+
+
+            // =========================================
+            // Save
+            // =========================================
+
+            await studentSubject.save();
+
+
+            return res.status(200).json({
+
+                status:
+                    http_status_text.SUCCESS,
+
+                data: {
+                    studentSubject
+                }
 
             });
 
-
-        if (!studentSubject) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'student subject not found',
-                404,
-                http_status_text.FAIL
-            );
-
-            return next(error);
         }
+    );
 
 
-        // =========================================
-        // Check Student Access
-        // =========================================
+// =====================================================
+// Remove Subject
+// =====================================================
 
-        const studentAssignment =
-            await getStudentAssignmentForUser(
-                req,
-                studentSubject.student_assignment
-            );
+const removeSubjectFromStudent =
+    AsyncWrapper(
 
+        async (req, res, next) => {
 
-        if (!studentAssignment) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'you cannot access this student',
-                403,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-        }
+            const student_subject_id =
+                req.params.student_subject_id;
 
 
-        // =========================================
-        // Soft Delete
-        // =========================================
+            const studentSubject =
+                await StudentSubject.findOne({
 
-        studentSubject.is_active =
-            false;
+                    _id:
+                        student_subject_id,
 
-        studentSubject.ended_at =
-            new Date();
+                    is_active:
+                        true
 
-
-        await studentSubject.save();
+                });
 
 
-        return res.status(200).json({
+            if (!studentSubject) {
 
-            status:
-                http_status_text.SUCCESS,
+                const error =
+                    new app_error();
 
-            message:
-                'subject removed from student successfully',
+                error.create(
+                    'student subject not found',
+                    404,
+                    http_status_text.FAIL
+                );
 
-            data: {
-                studentSubject
+                return next(error);
             }
 
-        });
 
-    }
-);
+            const studentAssignment =
+                await getStudentAssignmentForUser(
+                    req,
+                    studentSubject.student_assignment
+                );
+
+
+            if (!studentAssignment) {
+
+                const error =
+                    new app_error();
+
+                error.create(
+                    'you cannot access this student',
+                    403,
+                    http_status_text.FAIL
+                );
+
+                return next(error);
+            }
+
+
+            studentSubject.is_active =
+                false;
+
+
+            studentSubject.ended_at =
+                new Date();
+
+
+            await studentSubject.save();
+
+
+            return res.status(200).json({
+
+                status:
+                    http_status_text.SUCCESS,
+
+                message:
+                    'subject removed from student successfully',
+
+                data: {
+                    studentSubject
+                }
+
+            });
+
+        }
+    );
 
 
 module.exports = {
@@ -830,6 +1166,8 @@ module.exports = {
     changeStudentTeacher,
 
     changeStudentPrice,
+
+    changeMonthlyLessons,
 
     removeSubjectFromStudent
 
