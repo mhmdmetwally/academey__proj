@@ -38,29 +38,36 @@ const {
 // Get YYYY-MM
 // =====================================================
 
-const getMonthString = (date = new Date()) => {
+const getMonthString =
+    (date = new Date()) => {
 
-    const year =
-        date.getFullYear();
+        const year =
+            date.getFullYear();
 
-    const month =
-        String(
-            date.getMonth() + 1
-        ).padStart(2, '0');
+        const month =
+            String(
+                date.getMonth() + 1
+            ).padStart(
+                2,
+                '0'
+            );
 
-    return `${year}-${month}`;
-};
+        return `${year}-${month}`;
+
+    };
 
 
 // =====================================================
 // Validate Month
 // =====================================================
 
-const isValidMonth = (month) => {
+const isValidMonth =
+    (month) => {
 
-    return /^\d{4}-(0[1-9]|1[0-2])$/
-        .test(month);
-};
+        return /^\d{4}-(0[1-9]|1[0-2])$/
+            .test(month);
+
+    };
 
 
 // =====================================================
@@ -86,7 +93,8 @@ const addSubjectToStudent =
                 price_per_lesson,
                 monthly_lessons,
                 note
-            } = req.body;
+            } =
+                req.body;
 
 
             // =========================================
@@ -118,11 +126,15 @@ const addSubjectToStudent =
             // =========================================
 
             const monthlyLessons =
-                Number(monthly_lessons);
+                Number(
+                    monthly_lessons
+                );
 
 
             if (
-                !Number.isInteger(monthlyLessons) ||
+                !Number.isInteger(
+                    monthlyLessons
+                ) ||
                 monthlyLessons < 0
             ) {
 
@@ -175,7 +187,7 @@ const addSubjectToStudent =
                     _id:
                         subject_id,
 
-                    academy:
+                    academy_id:
                         academy_id,
 
                     is_active:
@@ -233,7 +245,9 @@ const addSubjectToStudent =
                 subject.teachers.some(
 
                     teacher_id =>
-                        String(teacher_id) ===
+                        String(
+                            teacher_id
+                        ) ===
                         String(
                             teacherAssignment.teacher
                         )
@@ -261,7 +275,9 @@ const addSubjectToStudent =
             // =========================================
 
             const price =
-                Number(price_per_lesson);
+                Number(
+                    price_per_lesson
+                );
 
 
             if (
@@ -330,25 +346,40 @@ const addSubjectToStudent =
                 const studentSubject =
                     await StudentSubject.create({
 
-                        academy_id,
+                        academy_id:
+
+                            academy_id,
+
 
                         student_assignment:
+
                             studentAssignment._id,
 
+
                         subject:
+
                             subject._id,
 
+
                         teacher:
+
                             teacherAssignment._id,
 
+
                         price_per_lesson:
+
                             price,
 
+
                         monthly_lessons:
+
                             monthlyLessons,
 
+
                         monthly_lessons_history: [
+
                             {
+
                                 month:
                                     currentMonth,
 
@@ -356,9 +387,13 @@ const addSubjectToStudent =
                                     monthlyLessons,
 
                                 note:
-                                    note || 'Initial monthly lessons'
+                                    note ||
+                                    'Initial monthly lessons'
+
                             }
+
                         ],
+
 
                         is_active:
                             true
@@ -372,12 +407,16 @@ const addSubjectToStudent =
                         http_status_text.SUCCESS,
 
                     data: {
+
                         studentSubject
+
                     }
 
                 });
 
-            } catch (error) {
+            }
+
+            catch (error) {
 
                 if (
                     error.code === 11000
@@ -397,10 +436,13 @@ const addSubjectToStudent =
                     );
                 }
 
+
                 return next(error);
+
             }
 
         }
+
     );
 
 
@@ -449,15 +491,12 @@ const getStudentSubjects =
                         true
 
                 })
-
                 .populate(
                     'subject'
                 )
-
                 .populate(
                     'teacher'
                 )
-
                 .sort({
                     createdAt: -1
                 });
@@ -469,12 +508,15 @@ const getStudentSubjects =
                     http_status_text.SUCCESS,
 
                 data: {
+
                     subjects
+
                 }
 
             });
 
         }
+
     );
 
 
@@ -493,10 +535,13 @@ const changeStudentTeacher =
 
             const {
                 teacher_assignment_id
-            } = req.body;
+            } =
+                req.body;
 
 
-            if (!teacher_assignment_id) {
+            if (
+                !teacher_assignment_id
+            ) {
 
                 const error =
                     new app_error();
@@ -510,6 +555,10 @@ const changeStudentTeacher =
                 return next(error);
             }
 
+
+            // =========================================
+            // Student Subject
+            // =========================================
 
             const studentSubject =
                 await StudentSubject.findOne({
@@ -538,6 +587,10 @@ const changeStudentTeacher =
             }
 
 
+            // =========================================
+            // Student Access
+            // =========================================
+
             const studentAssignment =
                 await getStudentAssignmentForUser(
                     req,
@@ -559,6 +612,10 @@ const changeStudentTeacher =
                 return next(error);
             }
 
+
+            // =========================================
+            // Teacher Access
+            // =========================================
 
             const teacherAssignment =
                 await getTeacherAssignmentForUser(
@@ -582,13 +639,17 @@ const changeStudentTeacher =
             }
 
 
+            // =========================================
+            // Subject
+            // =========================================
+
             const subject =
                 await Subject.findOne({
 
                     _id:
                         studentSubject.subject,
 
-                    academy:
+                    academy_id:
                         getAcademyId(req),
 
                     is_active:
@@ -612,11 +673,17 @@ const changeStudentTeacher =
             }
 
 
+            // =========================================
+            // Teacher belongs to Subject
+            // =========================================
+
             const teacherExists =
                 subject.teachers.some(
 
                     teacher_id =>
-                        String(teacher_id) ===
+                        String(
+                            teacher_id
+                        ) ===
                         String(
                             teacherAssignment.teacher
                         )
@@ -639,6 +706,10 @@ const changeStudentTeacher =
             }
 
 
+            // =========================================
+            // Change Teacher
+            // =========================================
+
             studentSubject.teacher =
                 teacherAssignment._id;
 
@@ -652,12 +723,15 @@ const changeStudentTeacher =
                     http_status_text.SUCCESS,
 
                 data: {
+
                     studentSubject
+
                 }
 
             });
 
         }
+
     );
 
 
@@ -676,7 +750,8 @@ const changeStudentPrice =
 
             const {
                 price_per_lesson
-            } = req.body;
+            } =
+                req.body;
 
 
             if (
@@ -697,7 +772,9 @@ const changeStudentPrice =
 
 
             const price =
-                Number(price_per_lesson);
+                Number(
+                    price_per_lesson
+                );
 
 
             if (
@@ -780,12 +857,15 @@ const changeStudentPrice =
                     http_status_text.SUCCESS,
 
                 data: {
+
                     studentSubject
+
                 }
 
             });
 
         }
+
     );
 
 
@@ -806,7 +886,8 @@ const changeMonthlyLessons =
                 monthly_lessons,
                 effective_month,
                 note
-            } = req.body;
+            } =
+                req.body;
 
 
             // =========================================
@@ -836,7 +917,9 @@ const changeMonthlyLessons =
             // =========================================
 
             const lessons =
-                Number(monthly_lessons);
+                Number(
+                    monthly_lessons
+                );
 
 
             if (
@@ -954,7 +1037,7 @@ const changeMonthlyLessons =
 
 
             // =========================================
-            // If month already exists
+            // Existing month
             // =========================================
 
             if (
@@ -973,9 +1056,11 @@ const changeMonthlyLessons =
 
 
                 existing.note =
-                    note || existing.note;
+                    note ||
+                    existing.note;
 
             }
+
 
             // =========================================
             // New month
@@ -990,10 +1075,13 @@ const changeMonthlyLessons =
                         month:
                             effective_month,
 
-                        lessons,
+                        lessons:
+
+                            lessons,
 
                         note:
-                            note || null
+                            note ||
+                            null
 
                     });
 
@@ -1001,7 +1089,7 @@ const changeMonthlyLessons =
 
 
             // =========================================
-            // Update current value
+            // Current month
             // =========================================
 
             const currentMonth =
@@ -1057,12 +1145,15 @@ const changeMonthlyLessons =
                     http_status_text.SUCCESS,
 
                 data: {
+
                     studentSubject
+
                 }
 
             });
 
         }
+
     );
 
 
@@ -1148,14 +1239,21 @@ const removeSubjectFromStudent =
                     'subject removed from student successfully',
 
                 data: {
+
                     studentSubject
+
                 }
 
             });
 
         }
+
     );
 
+
+// =====================================================
+// Export
+// =====================================================
 
 module.exports = {
 
