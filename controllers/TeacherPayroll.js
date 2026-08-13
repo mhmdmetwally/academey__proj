@@ -23,12 +23,9 @@ const {
     getTeacherAssignmentForUser
 } = require('../utils/AccessScope');
 
-// =====================================================
-// Helpers
-// =====================================================
 
 // =====================================================
-// Validate Billing Month
+// Helpers
 // =====================================================
 
 const isValidBillingMonth = (month) => {
@@ -39,9 +36,6 @@ const isValidBillingMonth = (month) => {
 
 };
 
-// =====================================================
-// Get Month Date Range
-// =====================================================
 
 const getMonthDateRange = (
     billing_month
@@ -88,9 +82,6 @@ const getMonthDateRange = (
 
 };
 
-// =====================================================
-// Round Money
-// =====================================================
 
 const roundMoney = (value) => {
 
@@ -100,9 +91,6 @@ const roundMoney = (value) => {
 
 };
 
-// =====================================================
-// Error Helper
-// =====================================================
 
 const createError = (
     message,
@@ -121,6 +109,7 @@ const createError = (
     return error;
 
 };
+
 
 // =====================================================
 // Generate Payroll
@@ -144,6 +133,7 @@ const generatePayroll =
             } =
                 req.body;
 
+
             // =========================================
             // Required
             // =========================================
@@ -161,6 +151,7 @@ const generatePayroll =
                 );
 
             }
+
 
             // =========================================
             // Validate Month
@@ -181,6 +172,7 @@ const generatePayroll =
 
             }
 
+
             // =========================================
             // Teacher Access
             // =========================================
@@ -190,6 +182,7 @@ const generatePayroll =
                     req,
                     teacher_assignment_id
                 );
+
 
             if (!teacherAssignment) {
 
@@ -201,6 +194,7 @@ const generatePayroll =
                 );
 
             }
+
 
             // =========================================
             // Same Academy
@@ -222,8 +216,9 @@ const generatePayroll =
 
             }
 
+
             // =========================================
-            // Check Existing Payroll
+            // Existing Payroll
             // =========================================
 
             const existingPayroll =
@@ -238,6 +233,7 @@ const generatePayroll =
 
                 });
 
+
             if (existingPayroll) {
 
                 return next(
@@ -248,6 +244,7 @@ const generatePayroll =
                 );
 
             }
+
 
             // =========================================
             // Month Range
@@ -261,8 +258,9 @@ const generatePayroll =
                     billing_month
                 );
 
+
             // =========================================
-            // Get Completed Lessons
+            // Completed Lessons
             // =========================================
 
             const lessons =
@@ -286,6 +284,7 @@ const generatePayroll =
                         lesson_date: 1
                     });
 
+
             // =========================================
             // No Lessons
             // =========================================
@@ -303,6 +302,7 @@ const generatePayroll =
 
             }
 
+
             // =========================================
             // Price Snapshot
             // =========================================
@@ -311,6 +311,7 @@ const generatePayroll =
                 Number(
                     teacherAssignment.price_per_lesson
                 );
+
 
             if (
                 Number.isNaN(
@@ -328,6 +329,7 @@ const generatePayroll =
 
             }
 
+
             // =========================================
             // Calculate Lessons
             // =========================================
@@ -336,25 +338,19 @@ const generatePayroll =
 
             let totalUnits = 0;
 
-            let totalAmount = 0;
+            let baseAmount = 0;
+
 
             for (
                 const lesson
                 of lessons
             ) {
 
-                // =====================================
-                // Hours / Units
-                // =====================================
-
                 const lessonUnits =
                     Number(
                         lesson.duration_minutes
                     ) / 60;
 
-                // =====================================
-                // Amount
-                // =====================================
 
                 const lessonAmount =
                     roundMoney(
@@ -362,11 +358,14 @@ const generatePayroll =
                         pricePerLesson
                     );
 
+
                 totalUnits +=
                     lessonUnits;
 
-                totalAmount +=
+
+                baseAmount +=
                     lessonAmount;
+
 
                 lessonSnapshots.push({
 
@@ -394,8 +393,9 @@ const generatePayroll =
 
             }
 
+
             // =========================================
-            // Final Totals
+            // Final Base Amount
             // =========================================
 
             totalUnits =
@@ -403,13 +403,17 @@ const generatePayroll =
                     totalUnits.toFixed(4)
                 );
 
-            totalAmount =
+
+            baseAmount =
                 roundMoney(
-                    totalAmount
+                    baseAmount
                 );
+
 
             // =========================================
             // Create Payroll
+            //
+            // No discounts initially
             // =========================================
 
             try {
@@ -439,14 +443,23 @@ const generatePayroll =
                         price_per_lesson:
                             pricePerLesson,
 
+                        base_amount:
+                            baseAmount,
+
+                        discounts:
+                            [],
+
+                        discount_amount:
+                            0,
+
                         total_amount:
-                            totalAmount,
+                            baseAmount,
 
                         paid_amount:
                             0,
 
                         remaining_amount:
-                            totalAmount,
+                            baseAmount,
 
                         status:
                             'pending',
@@ -461,6 +474,7 @@ const generatePayroll =
 
                     });
 
+
                 return res.status(201).json({
 
                     status:
@@ -473,10 +487,6 @@ const generatePayroll =
                 });
 
             } catch (error) {
-
-                // =====================================
-                // Unique Index
-                // =====================================
 
                 if (
                     error &&
@@ -499,6 +509,312 @@ const generatePayroll =
         }
     );
 
+
+// =====================================================
+// Add Discount
+// =====================================================
+//
+// Academy Admin only
+//
+// Body:
+//
+// {
+//     "amount": 200,
+//     "note": "خصم غياب"
+// }
+//
+// =====================================================
+
+const addDiscount =
+    AsyncWrapper(
+        async (
+            req,
+            res,
+            next
+        ) => {
+
+            const academy_id =
+                getAcademyId(req);
+
+
+            // =========================================
+            // Get Payroll
+            // =========================================
+
+            const payroll =
+                await TeacherPayroll.findOne({
+
+                    _id:
+                        req.params.payroll_id,
+
+                    academy_id
+
+                });
+
+
+            if (!payroll) {
+
+                return next(
+                    createError(
+                        'payroll not found',
+                        404
+                    )
+                );
+
+            }
+
+
+            // =========================================
+            // Verify Teacher Assignment
+            // =========================================
+
+            const teacherAssignment =
+                await getTeacherAssignmentForUser(
+                    req,
+                    payroll.teacher_assignment
+                );
+
+
+            if (!teacherAssignment) {
+
+                return next(
+                    createError(
+                        'you cannot access this payroll',
+                        403
+                    )
+                );
+
+            }
+
+
+            // =========================================
+            // Cannot Modify Cancelled Payroll
+            // =========================================
+
+            if (
+                payroll.status ===
+                'cancelled'
+            ) {
+
+                return next(
+                    createError(
+                        'cannot add discount to a cancelled payroll',
+                        400
+                    )
+                );
+
+            }
+
+
+            // =========================================
+            // Cannot Modify After Payment
+            // =========================================
+
+            if (
+                Number(
+                    payroll.paid_amount
+                ) > 0
+            ) {
+
+                return next(
+                    createError(
+                        'cannot add discount after payment has started',
+                        400
+                    )
+                );
+
+            }
+
+
+            // =========================================
+            // Body
+            // =========================================
+
+            const {
+                amount,
+                note
+            } =
+                req.body;
+
+
+            // =========================================
+            // Required
+            // =========================================
+
+            if (
+                amount === undefined ||
+                amount === null ||
+                !note
+            ) {
+
+                return next(
+                    createError(
+                        'amount and note are required',
+                        400
+                    )
+                );
+
+            }
+
+
+            // =========================================
+            // Validate Amount
+            // =========================================
+
+            const discountAmount =
+                Number(amount);
+
+
+            if (
+                !Number.isFinite(
+                    discountAmount
+                ) ||
+                discountAmount <= 0
+            ) {
+
+                return next(
+                    createError(
+                        'discount amount must be greater than 0',
+                        400
+                    )
+                );
+
+            }
+
+
+            const roundedDiscount =
+                roundMoney(
+                    discountAmount
+                );
+
+
+            // =========================================
+            // Cannot Discount More Than Base
+            // =========================================
+
+            if (
+                roundedDiscount >
+                payroll.base_amount -
+                payroll.discount_amount
+            ) {
+
+                return next(
+                    createError(
+                        'discount cannot be greater than the remaining salary before discount',
+                        400
+                    )
+                );
+
+            }
+
+
+            // =========================================
+            // Add Discount
+            // =========================================
+
+            payroll.discounts.push({
+
+                amount:
+                    roundedDiscount,
+
+                note:
+                    String(note).trim(),
+
+                created_at:
+                    new Date()
+
+            });
+
+
+            // =========================================
+            // Update Discount Total
+            // =========================================
+
+            payroll.discount_amount =
+                roundMoney(
+                    Number(
+                        payroll.discount_amount
+                    ) +
+                    roundedDiscount
+                );
+
+
+            // =========================================
+            // Calculate Final Salary
+            // =========================================
+
+            payroll.total_amount =
+                roundMoney(
+                    Number(
+                        payroll.base_amount
+                    ) -
+                    Number(
+                        payroll.discount_amount
+                    )
+                );
+
+
+            // =========================================
+            // Update Remaining
+            // =========================================
+
+            payroll.remaining_amount =
+                roundMoney(
+                    Number(
+                        payroll.total_amount
+                    ) -
+                    Number(
+                        payroll.paid_amount
+                    )
+                );
+
+
+            // =========================================
+            // Status
+            // =========================================
+
+            if (
+                payroll.remaining_amount <= 0
+            ) {
+
+                payroll.remaining_amount =
+                    0;
+
+                payroll.status =
+                    'paid';
+
+                payroll.paid_at =
+                    new Date();
+
+            } else {
+
+                payroll.status =
+                    'pending';
+
+                payroll.paid_at =
+                    null;
+
+            }
+
+
+            await payroll.save();
+
+
+            return res.status(200).json({
+
+                status:
+                    http_status_text.SUCCESS,
+
+                data: {
+                    payroll
+                }
+
+            });
+
+        }
+    );
+
+
 // =====================================================
 // Get Payrolls
 // =====================================================
@@ -517,6 +833,7 @@ const getPayrolls =
             const filter = {
                 academy_id
             };
+
 
             // =========================================
             // Billing Month
@@ -546,6 +863,7 @@ const getPayrolls =
 
             }
 
+
             // =========================================
             // Teacher Assignment
             // =========================================
@@ -560,6 +878,7 @@ const getPayrolls =
                         req.query.teacher_assignment_id
                     );
 
+
                 if (!teacherAssignment) {
 
                     return next(
@@ -571,10 +890,12 @@ const getPayrolls =
 
                 }
 
+
                 filter.teacher_assignment =
                     req.query.teacher_assignment_id;
 
             }
+
 
             // =========================================
             // Status
@@ -591,6 +912,7 @@ const getPayrolls =
                     'cancelled'
                 ];
 
+
                 if (
                     !allowedStatuses.includes(
                         req.query.status
@@ -606,25 +928,25 @@ const getPayrolls =
 
                 }
 
+
                 filter.status =
                     req.query.status;
 
             }
 
+
             // =========================================
             // Get Payrolls
             // =========================================
 
-            let payrolls =
+            const payrolls =
                 await TeacherPayroll.find(
                     filter
                 )
-
                     .populate(
                         'teacher',
                         'user is_active'
                     )
-
                     .populate({
                         path:
                             'teacher_assignment',
@@ -634,24 +956,18 @@ const getPayrolls =
                                 'teacher'
                         }
                     })
-
                     .sort({
                         billing_month: -1,
                         createdAt: -1
                     });
 
+
             // =========================================
-            // Important:
-            //
-            // Verify every Payroll's Assignment
-            // through AccessScope.
-            //
-            // This prevents a Supervisor from
-            // seeing payrolls belonging to another
-            // teacher assignment.
+            // Verify Access
             // =========================================
 
             const accessiblePayrolls = [];
+
 
             for (
                 const payroll
@@ -661,14 +977,18 @@ const getPayrolls =
                 const teacherAssignmentId =
                     payroll.teacher_assignment &&
                     payroll.teacher_assignment._id
-                        ? payroll.teacher_assignment._id
-                        : payroll.teacher_assignment;
+                        ?
+                        payroll.teacher_assignment._id
+                        :
+                        payroll.teacher_assignment;
+
 
                 const accessible =
                     await getTeacherAssignmentForUser(
                         req,
                         teacherAssignmentId
                     );
+
 
                 if (accessible) {
 
@@ -679,6 +999,7 @@ const getPayrolls =
                 }
 
             }
+
 
             return res.status(200).json({
 
@@ -695,6 +1016,7 @@ const getPayrolls =
         }
     );
 
+
 // =====================================================
 // Get Single Payroll
 // =====================================================
@@ -710,6 +1032,7 @@ const getSinglePayroll =
             const academy_id =
                 getAcademyId(req);
 
+
             const payroll =
                 await TeacherPayroll.findOne({
 
@@ -719,12 +1042,10 @@ const getSinglePayroll =
                     academy_id
 
                 })
-
                     .populate(
                         'teacher',
                         'user is_active'
                     )
-
                     .populate({
                         path:
                             'teacher_assignment',
@@ -734,11 +1055,11 @@ const getSinglePayroll =
                                 'teacher'
                         }
                     })
-
                     .populate({
                         path:
                             'lessons.lesson'
                     });
+
 
             if (!payroll) {
 
@@ -751,6 +1072,7 @@ const getSinglePayroll =
 
             }
 
+
             // =========================================
             // Access Check
             // =========================================
@@ -758,14 +1080,18 @@ const getSinglePayroll =
             const teacherAssignmentId =
                 payroll.teacher_assignment &&
                 payroll.teacher_assignment._id
-                    ? payroll.teacher_assignment._id
-                    : payroll.teacher_assignment;
+                    ?
+                    payroll.teacher_assignment._id
+                    :
+                    payroll.teacher_assignment;
+
 
             const teacherAssignment =
                 await getTeacherAssignmentForUser(
                     req,
                     teacherAssignmentId
                 );
+
 
             if (!teacherAssignment) {
 
@@ -777,6 +1103,7 @@ const getSinglePayroll =
                 );
 
             }
+
 
             return res.status(200).json({
 
@@ -791,6 +1118,7 @@ const getSinglePayroll =
 
         }
     );
+
 
 // =====================================================
 // Pay Payroll
@@ -807,6 +1135,7 @@ const payPayroll =
             const academy_id =
                 getAcademyId(req);
 
+
             const {
                 amount,
                 payment_method,
@@ -814,6 +1143,7 @@ const payPayroll =
                 notes
             } =
                 req.body;
+
 
             // =========================================
             // Validate Amount
@@ -833,8 +1163,10 @@ const payPayroll =
 
             }
 
+
             const paymentAmount =
                 Number(amount);
+
 
             if (
                 !Number.isFinite(
@@ -852,10 +1184,12 @@ const payPayroll =
 
             }
 
+
             const roundedPaymentAmount =
                 roundMoney(
                     paymentAmount
                 );
+
 
             // =========================================
             // Payment Method
@@ -869,9 +1203,11 @@ const payPayroll =
                 'other'
             ];
 
+
             const finalPaymentMethod =
                 payment_method ||
                 'cash';
+
 
             if (
                 !allowedPaymentMethods.includes(
@@ -888,6 +1224,7 @@ const payPayroll =
 
             }
 
+
             // =========================================
             // Mongo Session
             // =========================================
@@ -895,9 +1232,11 @@ const payPayroll =
             const session =
                 await mongoose.startSession();
 
+
             try {
 
                 session.startTransaction();
+
 
                 // =====================================
                 // Get Payroll
@@ -913,6 +1252,7 @@ const payPayroll =
 
                     }).session(session);
 
+
                 if (!payroll) {
 
                     await session.abortTransaction();
@@ -926,6 +1266,7 @@ const payPayroll =
 
                 }
 
+
                 // =====================================
                 // Access
                 // =====================================
@@ -935,6 +1276,7 @@ const payPayroll =
                         req,
                         payroll.teacher_assignment
                     );
+
 
                 if (!teacherAssignment) {
 
@@ -948,6 +1290,7 @@ const payPayroll =
                     );
 
                 }
+
 
                 // =====================================
                 // Cancelled
@@ -969,6 +1312,7 @@ const payPayroll =
 
                 }
 
+
                 // =====================================
                 // Already Paid
                 // =====================================
@@ -987,6 +1331,7 @@ const payPayroll =
                     );
 
                 }
+
 
                 // =====================================
                 // Cannot Overpay
@@ -1008,6 +1353,7 @@ const payPayroll =
 
                 }
 
+
                 // =====================================
                 // Update Payroll
                 // =====================================
@@ -1020,6 +1366,7 @@ const payPayroll =
                         roundedPaymentAmount
                     );
 
+
                 payroll.remaining_amount =
                     roundMoney(
                         Number(
@@ -1029,6 +1376,7 @@ const payPayroll =
                             payroll.paid_amount
                         )
                     );
+
 
                 if (
                     payroll.remaining_amount <= 0
@@ -1050,11 +1398,9 @@ const payPayroll =
 
                 }
 
+
                 // =====================================
                 // Create Expense
-                //
-                // Expense = actual cash paid
-                // وليس كامل الراتب المستحق
                 // =====================================
 
                 const expense =
@@ -1095,11 +1441,14 @@ const payPayroll =
                         }
                     );
 
+
                 await payroll.save({
                     session
                 });
 
+
                 await session.commitTransaction();
+
 
                 return res.status(200).json({
 
@@ -1132,6 +1481,7 @@ const payPayroll =
         }
     );
 
+
 // =====================================================
 // Cancel Payroll
 // =====================================================
@@ -1147,6 +1497,7 @@ const cancelPayroll =
             const academy_id =
                 getAcademyId(req);
 
+
             const payroll =
                 await TeacherPayroll.findOne({
 
@@ -1156,6 +1507,7 @@ const cancelPayroll =
                     academy_id
 
                 });
+
 
             if (!payroll) {
 
@@ -1168,6 +1520,7 @@ const cancelPayroll =
 
             }
 
+
             // =========================================
             // Access
             // =========================================
@@ -1177,6 +1530,7 @@ const cancelPayroll =
                     req,
                     payroll.teacher_assignment
                 );
+
 
             if (!teacherAssignment) {
 
@@ -1188,6 +1542,7 @@ const cancelPayroll =
                 );
 
             }
+
 
             // =========================================
             // Already Cancelled
@@ -1207,6 +1562,7 @@ const cancelPayroll =
 
             }
 
+
             // =========================================
             // Cannot Cancel Paid Payroll
             // =========================================
@@ -1224,10 +1580,13 @@ const cancelPayroll =
 
             }
 
+
             payroll.status =
                 'cancelled';
 
+
             await payroll.save();
+
 
             return res.status(200).json({
 
@@ -1243,6 +1602,7 @@ const cancelPayroll =
         }
     );
 
+
 // =====================================================
 // Module Exports
 // =====================================================
@@ -1250,6 +1610,8 @@ const cancelPayroll =
 module.exports = {
 
     generatePayroll,
+
+    addDiscount,
 
     getPayrolls,
 

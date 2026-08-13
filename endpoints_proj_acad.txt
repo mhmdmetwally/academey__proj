@@ -31,7 +31,14 @@ GET    /teacher/my-teachers
 GET    /teacher/my-academies
 GET    /teacher/:teacher_id
 PATCH  /teacher/:teacher_id
+PATCH /teacher-payroll/:payroll_id/discount
+PATCH /teacher-payroll/:payroll_id/bonus
 
+POST /api/supervisor-payroll
+POST /api/supervisor-payroll/:payroll_id/bonus
+POST /api/supervisor-payroll/:payroll_id/deduction
+PATCH /api/supervisor-payroll/:payroll_id/pay
+GET /api/supervisor-payroll
 
 POST   /subject
 GET    /subject

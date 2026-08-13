@@ -16,6 +16,7 @@ const user_role =
 const verify_token =
     require('../middleware/VerifyToken');
 
+
 // =====================================================
 // Generate Payroll
 // =====================================================
@@ -33,6 +34,7 @@ router.route('/generate')
         teacher_payroll_controller.generatePayroll
 
     );
+
 
 // =====================================================
 // Get All Payrolls
@@ -52,6 +54,28 @@ router.route('/')
 
     );
 
+
+// =====================================================
+// Add Discount
+//
+// Academy Admin ONLY
+//
+// =====================================================
+
+router.route('/:payroll_id/discount')
+    .patch(
+
+        verify_token,
+
+        allowed_tool(
+            user_role.academy_admin
+        ),
+
+        teacher_payroll_controller.addDiscount
+
+    );
+
+
 // =====================================================
 // Get Single Payroll
 // =====================================================
@@ -69,6 +93,7 @@ router.route('/:payroll_id')
         teacher_payroll_controller.getSinglePayroll
 
     );
+
 
 // =====================================================
 // Pay Payroll
@@ -88,6 +113,7 @@ router.route('/:payroll_id/pay')
 
     );
 
+
 // =====================================================
 // Cancel Payroll
 // =====================================================
@@ -105,6 +131,7 @@ router.route('/:payroll_id/cancel')
         teacher_payroll_controller.cancelPayroll
 
     );
+
 
 module.exports =
     router;

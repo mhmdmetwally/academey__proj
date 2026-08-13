@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 
+
 // =====================================================
 // Payroll Lesson Snapshot
 // =====================================================
@@ -7,7 +8,7 @@ const mongoose = require('mongoose');
 const PayrollLessonSchema = new mongoose.Schema(
     {
         // =========================================
-        // الحصة الأصلية
+        // Original Lesson
         // =========================================
 
         lesson: {
@@ -17,8 +18,7 @@ const PayrollLessonSchema = new mongoose.Schema(
         },
 
         // =========================================
-        // تاريخ الحصة
-        // Snapshot
+        // Lesson Date Snapshot
         // =========================================
 
         lesson_date: {
@@ -27,8 +27,7 @@ const PayrollLessonSchema = new mongoose.Schema(
         },
 
         // =========================================
-        // مدة الحصة بالدقائق
-        // Snapshot
+        // Duration
         // =========================================
 
         duration_minutes: {
@@ -38,12 +37,7 @@ const PayrollLessonSchema = new mongoose.Schema(
         },
 
         // =========================================
-        // وحدات الحصة
-        //
-        // 60  = 1
-        // 80  = 1.3333
-        // 90  = 1.5
-        // 120 = 2
+        // Lesson Units
         // =========================================
 
         lesson_units: {
@@ -53,8 +47,7 @@ const PayrollLessonSchema = new mongoose.Schema(
         },
 
         // =========================================
-        // سعر الساعة وقت إنشاء Payroll
-        // Snapshot
+        // Price Snapshot
         // =========================================
 
         price_per_lesson: {
@@ -64,8 +57,7 @@ const PayrollLessonSchema = new mongoose.Schema(
         },
 
         // =========================================
-        // قيمة الحصة
-        // Snapshot
+        // Lesson Amount
         // =========================================
 
         amount: {
@@ -78,6 +70,59 @@ const PayrollLessonSchema = new mongoose.Schema(
         _id: false
     }
 );
+
+
+// =====================================================
+// Payroll Discount
+// =====================================================
+//
+// كل خصم خاص بهذا الـ Payroll / الشهر
+//
+// مثال:
+//
+// {
+//     amount: 200,
+//     note: "خصم غياب"
+// }
+//
+// =====================================================
+
+const PayrollDiscountSchema = new mongoose.Schema(
+    {
+        // =========================================
+        // Discount Amount
+        // =========================================
+
+        amount: {
+            type: Number,
+            required: true,
+            min: 0
+        },
+
+        // =========================================
+        // Discount Reason / Note
+        // =========================================
+
+        note: {
+            type: String,
+            required: true,
+            trim: true
+        },
+
+        // =========================================
+        // Created At
+        // =========================================
+
+        created_at: {
+            type: Date,
+            default: Date.now
+        }
+    },
+    {
+        _id: true
+    }
+);
+
 
 // =====================================================
 // Teacher Payroll
@@ -98,10 +143,6 @@ const TeacherPayrollSchema = new mongoose.Schema(
 
         // =========================================
         // Teacher Assignment
-        //
-        // مهم:
-        // نفس المدرس ممكن يكون في أكثر من Academy
-        // لذلك الربط يكون بالـ Assignment
         // =========================================
 
         teacher_assignment: {
@@ -124,7 +165,6 @@ const TeacherPayrollSchema = new mongoose.Schema(
 
         // =========================================
         // Billing Month
-        //
         // YYYY-MM
         // =========================================
 
@@ -165,7 +205,7 @@ const TeacherPayrollSchema = new mongoose.Schema(
         },
 
         // =========================================
-        // سعر الساعة وقت إنشاء Payroll
+        // Price Per Lesson Snapshot
         // =========================================
 
         price_per_lesson: {
@@ -175,7 +215,46 @@ const TeacherPayrollSchema = new mongoose.Schema(
         },
 
         // =========================================
-        // إجمالي الراتب
+        // Base Amount
+        //
+        // إجمالي الحصص قبل الخصومات
+        // =========================================
+
+        base_amount: {
+            type: Number,
+            required: true,
+            min: 0
+        },
+
+        // =========================================
+        // Discounts
+        //
+        // كل خصم له:
+        // amount
+        // note
+        // =========================================
+
+        discounts: {
+            type: [PayrollDiscountSchema],
+            default: []
+        },
+
+        // =========================================
+        // Total Discount Amount
+        //
+        // مجموع كل الخصومات
+        // =========================================
+
+        discount_amount: {
+            type: Number,
+            default: 0,
+            min: 0
+        },
+
+        // =========================================
+        // Final Salary
+        //
+        // base_amount - discount_amount
         // =========================================
 
         total_amount: {
@@ -185,7 +264,7 @@ const TeacherPayrollSchema = new mongoose.Schema(
         },
 
         // =========================================
-        // المدفوع
+        // Paid
         // =========================================
 
         paid_amount: {
@@ -195,7 +274,7 @@ const TeacherPayrollSchema = new mongoose.Schema(
         },
 
         // =========================================
-        // المتبقي
+        // Remaining
         // =========================================
 
         remaining_amount: {
@@ -205,7 +284,7 @@ const TeacherPayrollSchema = new mongoose.Schema(
         },
 
         // =========================================
-        // الحالة
+        // Status
         // =========================================
 
         status: {
@@ -224,7 +303,7 @@ const TeacherPayrollSchema = new mongoose.Schema(
         },
 
         // =========================================
-        // تاريخ الدفع الكامل
+        // Full Payment Date
         // =========================================
 
         paid_at: {
@@ -233,7 +312,7 @@ const TeacherPayrollSchema = new mongoose.Schema(
         },
 
         // =========================================
-        // تاريخ إنشاء Snapshot
+        // Generated At
         // =========================================
 
         generated_at: {
@@ -256,13 +335,12 @@ const TeacherPayrollSchema = new mongoose.Schema(
     }
 );
 
+
 // =====================================================
 // Indexes
 // =====================================================
 
-// =====================================================
-// Payroll واحد فقط لكل مدرس داخل الأكاديمية في الشهر
-// =====================================================
+// One Payroll per Teacher Assignment per Month
 
 TeacherPayrollSchema.index(
     {
@@ -275,18 +353,16 @@ TeacherPayrollSchema.index(
     }
 );
 
-// =====================================================
-// البحث عن Payrolls للأكاديمية في شهر
-// =====================================================
+
+// Academy + Month
 
 TeacherPayrollSchema.index({
     academy_id: 1,
     billing_month: 1
 });
 
-// =====================================================
-// البحث عن Payrolls للمدرس
-// =====================================================
+
+// Teacher + Month
 
 TeacherPayrollSchema.index({
     academy_id: 1,
@@ -294,7 +370,9 @@ TeacherPayrollSchema.index({
     billing_month: 1
 });
 
-module.exports = mongoose.model(
-    'TeacherPayroll',
-    TeacherPayrollSchema
-);
+
+module.exports =
+    mongoose.model(
+        'TeacherPayroll',
+        TeacherPayrollSchema
+    );
