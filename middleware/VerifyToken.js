@@ -227,6 +227,7 @@ const verify_token = async (
 
                 return next(error);
             }
+            req.user.academy_id = supervisor.academy_id;
 
         }
 
