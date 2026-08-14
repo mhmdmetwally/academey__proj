@@ -19,6 +19,7 @@ const verify_token =
 
 // =====================================================
 // Academy Admin
+// Supervisor
 // =====================================================
 
 // Create Student
@@ -26,7 +27,8 @@ router.route('/')
     .post(
         verify_token,
         allowed_tool(
-            user_role.academy_admin
+            user_role.academy_admin,
+             user_role.supervisor
         ),
         student_controller.createStudent
     );
