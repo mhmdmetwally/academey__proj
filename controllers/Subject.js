@@ -698,309 +698,133 @@ const updateSubject =
 // Academy Admin only
 // =====================================================
 
-const addTeacherToSubject =
-    AsyncWrapper(
+const addTeacherToSubject = AsyncWrapper(async (req, res, next) => {
+    const { subject_id, teacher_id } = req.params;
 
-        async (req, res, next) => {
+    // ✅ التنسيق الصحيح للحصول على academy_id
+    const academy_id = req.user.academy_id || req.user.id;
 
-            const {
-                subject_id,
-                teacher_id
-            } = req.params;
+    // 1. Find Subject
+    const subject = await Subject.findOne({
+        _id: subject_id,
+        academy_id: academy_id
+    });
 
+    if (!subject) {
+        const error = new app_error();
+        error.create('subject not found in this academy', 404, http_status_text.FAIL);
+        return next(error);
+    }
 
-            const academy_id =
-                req.user.id;
+    // 2. Find Teacher Assignment (دعم البحث بـ TeacherAssignment ID أو Teacher ID)
+    const teacherAssignment = await TeacherAssignment.findOne({
+        $or: [
+            { _id: teacher_id },
+            { teacher: teacher_id }
+        ],
+        academy_id: academy_id,
+        is_active: true
+    });
 
+    if (!teacherAssignment) {
+        const error = new app_error();
+        error.create('teacher not found in this academy', 404, http_status_text.FAIL);
+        return next(error);
+    }
 
-            // =========================================
-            // Find Subject
-            // =========================================
-
-            const subject =
-                await Subject.findOne({
-
-                    _id:
-                        subject_id,
-
-                    academy_id:
-                        academy_id
-
-                });
-
-
-            if (!subject) {
-
-                const error =
-                    new app_error();
-
-                error.create(
-                    'subject not found in this academy',
-                    404,
-                    http_status_text.FAIL
-                );
-
-                return next(error);
-            }
-
-
-            // =========================================
-            // Find Teacher
-            // =========================================
-
-            const teacher =
-                await TeacherAssignment.findOne({
-
-                    _id:
-                        teacher_id,
-
-                    academy_id:
-                        academy_id,
-
-                    is_active:
-                        true
-
-                });
-
-
-            if (!teacher) {
-
-                const error =
-                    new app_error();
-
-                error.create(
-                    'teacher not found in this academy',
-                    404,
-                    http_status_text.FAIL
-                );
-
-                return next(error);
-            }
-
-
-            // =========================================
-            // Duplicate
-            // =========================================
-
-            const already_exists =
-                subject.teachers.some(
-
-                    id =>
-                        id.toString() ===
-                        teacher._id.toString()
-
-                );
-
-
-            if (already_exists) {
-
-                const error =
-                    new app_error();
-
-                error.create(
-                    'teacher is already assigned to this subject',
-                    409,
-                    http_status_text.FAIL
-                );
-
-                return next(error);
-            }
-
-
-            // =========================================
-            // Add Teacher
-            // =========================================
-
-            subject.teachers.push(
-                teacher._id
-            );
-
-
-            await subject.save();
-
-
-            const updated_subject =
-                await Subject.findById(
-                    subject._id
-                )
-                .populate(
-                    'teachers'
-                )
-                .populate(
-                    'academy_id',
-                    'academy_name academy_code'
-                );
-
-
-            return res.status(200).json({
-
-                status:
-                    http_status_text.SUCCESS,
-
-                data: {
-
-                    subject:
-                        updated_subject
-
-                }
-
-            });
-
-        }
-
+    // 3. Duplicate Check
+    const already_exists = subject.teachers.some(
+        id => id.toString() === teacherAssignment._id.toString()
     );
+
+    if (already_exists) {
+        const error = new app_error();
+        error.create('teacher is already assigned to this subject', 409, http_status_text.FAIL);
+        return next(error);
+    }
+
+    // 4. Add Teacher Assignment ID
+    subject.teachers.push(teacherAssignment._id);
+    await subject.save();
+
+    const updated_subject = await Subject.findById(subject._id)
+        .populate({
+            path: 'teachers',
+            populate: { path: 'teacher', select: 'name phone' }
+        })
+        .populate('academy_id', 'academy_name academy_code');
+
+    return res.status(200).json({
+        status: http_status_text.SUCCESS,
+        data: { subject: updated_subject }
+    });
+});
 
 
 // =====================================================
 // Remove Teacher From Subject
 // =====================================================
+const removeTeacherFromSubject = AsyncWrapper(async (req, res, next) => {
+    const { subject_id, teacher_id } = req.params;
 
-const removeTeacherFromSubject =
-    AsyncWrapper(
+    // ✅ التنسيق الصحيح للحصول على academy_id
+    const academy_id = req.user.academy_id || req.user.id;
 
-        async (req, res, next) => {
+    // 1. Find Subject
+    const subject = await Subject.findOne({
+        _id: subject_id,
+        academy_id: academy_id
+    });
 
-            const {
-                subject_id,
-                teacher_id
-            } = req.params;
+    if (!subject) {
+        const error = new app_error();
+        error.create('subject not found in this academy', 404, http_status_text.FAIL);
+        return next(error);
+    }
 
+    // 2. Find Teacher Assignment
+    const teacherAssignment = await TeacherAssignment.findOne({
+        $or: [
+            { _id: teacher_id },
+            { teacher: teacher_id }
+        ],
+        academy_id: academy_id
+    });
 
-            const academy_id =
-                req.user.id;
+    if (!teacherAssignment) {
+        const error = new app_error();
+        error.create('teacher not found in this academy', 404, http_status_text.FAIL);
+        return next(error);
+    }
 
+    // 3. Remove Teacher Assignment
+    const targetAssignmentId = teacherAssignment._id.toString();
+    const old_length = subject.teachers.length;
 
-            // =========================================
-            // Find Subject
-            // =========================================
-
-            const subject =
-                await Subject.findOne({
-
-                    _id:
-                        subject_id,
-
-                    academy_id:
-                        academy_id
-
-                });
-
-
-            if (!subject) {
-
-                const error =
-                    new app_error();
-
-                error.create(
-                    'subject not found in this academy',
-                    404,
-                    http_status_text.FAIL
-                );
-
-                return next(error);
-            }
-
-
-            // =========================================
-            // Check Teacher
-            // =========================================
-
-            const teacher =
-                await TeacherAssignment.findOne({
-
-                    _id:
-                        teacher_id,
-
-                    academy_id:
-                        academy_id
-
-                });
-
-
-            if (!teacher) {
-
-                const error =
-                    new app_error();
-
-                error.create(
-                    'teacher not found in this academy',
-                    404,
-                    http_status_text.FAIL
-                );
-
-                return next(error);
-            }
-
-
-            // =========================================
-            // Remove
-            // =========================================
-
-            const old_length =
-                subject.teachers.length;
-
-
-            subject.teachers =
-                subject.teachers.filter(
-
-                    id =>
-                        id.toString() !==
-                        teacher_id
-
-                );
-
-
-            if (
-                subject.teachers.length ===
-                old_length
-            ) {
-
-                const error =
-                    new app_error();
-
-                error.create(
-                    'teacher is not assigned to this subject',
-                    404,
-                    http_status_text.FAIL
-                );
-
-                return next(error);
-            }
-
-
-            await subject.save();
-
-
-            const updated_subject =
-                await Subject.findById(
-                    subject._id
-                )
-                .populate(
-                    'teachers'
-                )
-                .populate(
-                    'academy_id',
-                    'academy_name academy_code'
-                );
-
-
-            return res.status(200).json({
-
-                status:
-                    http_status_text.SUCCESS,
-
-                data: {
-
-                    subject:
-                        updated_subject
-
-                }
-
-            });
-
-        }
-
+    subject.teachers = subject.teachers.filter(
+        id => id.toString() !== targetAssignmentId
     );
+
+    if (subject.teachers.length === old_length) {
+        const error = new app_error();
+        error.create('teacher is not assigned to this subject', 404, http_status_text.FAIL);
+        return next(error);
+    }
+
+    await subject.save();
+
+    const updated_subject = await Subject.findById(subject._id)
+        .populate({
+            path: 'teachers',
+            populate: { path: 'teacher', select: 'name phone' }
+        })
+        .populate('academy_id', 'academy_name academy_code');
+
+    return res.status(200).json({
+        status: http_status_text.SUCCESS,
+        data: { subject: updated_subject }
+    });
+});
 
 
 // =====================================================
