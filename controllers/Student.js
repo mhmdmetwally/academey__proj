@@ -7,8 +7,8 @@ const Student =
 const StudentAssignment =
     require('../models/StudentAssignment');
 
-const User =
-    require('../models/User');
+const Family =
+    require('../models/Family');
 
 const Supervisor =
     require('../models/Supervisor');
@@ -229,7 +229,7 @@ const createStudent = AsyncWrapper(
         // =================================================
 
         const family =
-            await User.findOne({
+            await Family.findOne({
 
                 _id:
                     family_id,
