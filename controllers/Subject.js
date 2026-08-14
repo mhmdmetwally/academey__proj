@@ -226,7 +226,7 @@ const getSubjects =
             // =========================================
 
             else if (
-                req.user.academy_id
+                req.user.academy_id===user_role.supervisor
             ) {
 
                 academy_id =
