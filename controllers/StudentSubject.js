@@ -244,12 +244,13 @@ const addSubjectToStudent =
             const teacherExists =
                 subject.teachers.some(
 
-                    teacher_id =>
+                    teacherAssignmentId =>
+
                         String(
-                            teacher_id
+                            teacherAssignmentId
                         ) ===
                         String(
-                            teacherAssignment.teacher
+                            teacherAssignment._id
                         )
 
                 );
@@ -268,7 +269,6 @@ const addSubjectToStudent =
 
                 return next(error);
             }
-
 
             // =========================================
             // Validate Price
