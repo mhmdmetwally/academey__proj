@@ -26,7 +26,6 @@ const http_status_text =
 
 const user_role =
     require('../utils/UserRole');
-const TeacherAssignment = require('../models/TeacherAssignment');
 
 
 // =====================================================
@@ -907,7 +906,7 @@ const removeTeacherFromSubject =
             // =========================================
 
             const teacher =
-                await Teacher.findOne({
+                await TeacherAssignment.findOne({
 
                     _id:
                         teacher_id,
