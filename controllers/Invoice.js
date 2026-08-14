@@ -4,6 +4,9 @@ const AsyncWrapper =
 const Invoice =
     require('../models/Invoice');
 
+const Family =
+    require('../models/Family');
+
 const StudentSubject =
     require('../models/StudentSubject');
 
@@ -27,10 +30,219 @@ const {
 
 
 // =====================================================
+// Helper: Create Error
+// =====================================================
+
+const createError = (
+    message,
+    statusCode
+) => {
+
+    const error =
+        new app_error();
+
+    error.create(
+        message,
+        statusCode,
+        http_status_text.FAIL
+    );
+
+    return error;
+};
+
+
+// =====================================================
+// Helper: Validate Billing Month
+// =====================================================
+
+const isValidBillingMonth = (
+    billing_month
+) => {
+
+    return /^\d{4}-(0[1-9]|1[0-2])$/.test(
+        billing_month
+    );
+
+};
+
+
+// =====================================================
+// Helper: Get Month Range
+// =====================================================
+
+const getMonthRange = (
+    billing_month
+) => {
+
+    const [
+        year,
+        month
+    ] =
+        billing_month
+            .split('-')
+            .map(Number);
+
+
+    const monthStart =
+        new Date(
+            year,
+            month - 1,
+            1,
+            0,
+            0,
+            0,
+            0
+        );
+
+
+    const nextMonth =
+        new Date(
+            year,
+            month,
+            1,
+            0,
+            0,
+            0,
+            0
+        );
+
+
+    return {
+        monthStart,
+        nextMonth
+    };
+
+};
+
+
+// =====================================================
+// Helper: Calculate Discounts
+//
+// كل خصم نسبة مئوية مستقلة
+//
+// مثال:
+//
+// total = 1000
+//
+// discount 1 = 10%
+// discount 2 = 5%
+//
+// يتم تطبيق الخصومات بالتتابع:
+//
+// 1000 - 10% = 900
+// 900 - 5% = 855
+//
+// وليس 1000 - 15%
+//
+// =====================================================
+
+const calculateDiscounts = (
+    totalAmount,
+    discounts
+) => {
+
+    let currentAmount =
+        Number(totalAmount);
+
+
+    const discountSnapshots = [];
+
+
+    for (
+        const discount
+        of discounts
+    ) {
+
+        const percentage =
+            Number(
+                discount.percentage
+            );
+
+
+        if (
+            Number.isNaN(
+                percentage
+            ) ||
+            percentage <= 0 ||
+            percentage > 100
+        ) {
+
+            throw createError(
+                'discount percentage must be greater than 0 and less than or equal to 100',
+                400
+            );
+
+        }
+
+
+        const beforeAmount =
+            currentAmount;
+
+
+        const discountAmount =
+            Number(
+                (
+                    currentAmount *
+                    percentage /
+                    100
+                ).toFixed(2)
+            );
+
+
+        currentAmount =
+            Number(
+                (
+                    currentAmount -
+                    discountAmount
+                ).toFixed(2)
+            );
+
+
+        discountSnapshots.push({
+
+            percentage,
+
+            amount:
+                discountAmount,
+
+            reason:
+                discount.reason ||
+                null
+
+        });
+
+    }
+
+
+    return {
+
+        discounts:
+            discountSnapshots,
+
+        totalDiscount:
+            Number(
+                (
+                    totalAmount -
+                    currentAmount
+                ).toFixed(2)
+            ),
+
+        finalAmount:
+            Number(
+                currentAmount.toFixed(2)
+            )
+
+    };
+
+};
+
+
+// =====================================================
 // Create Invoice
 // =====================================================
 
 const createInvoice = AsyncWrapper(
+
     async (req, res, next) => {
 
         const academy_id =
@@ -41,9 +253,14 @@ const createInvoice = AsyncWrapper(
             family,
             items,
             billing_month,
+            discounts = [],
             notes
         } = req.body;
 
+
+        // =============================================
+        // Basic Validation
+        // =============================================
 
         if (
             !family ||
@@ -52,52 +269,119 @@ const createInvoice = AsyncWrapper(
             !billing_month
         ) {
 
-            const error =
-                new app_error();
-
-            error.create(
-                'family, items and billing_month are required',
-                400,
-                http_status_text.FAIL
+            return next(
+                createError(
+                    'family, items and billing_month are required',
+                    400
+                )
             );
 
-            return next(error);
         }
 
 
-        // =========================================
-        // Validate billing month
-        // =========================================
+        // =============================================
+        // Validate Billing Month
+        // =============================================
 
         if (
-            !/^\d{4}-(0[1-9]|1[0-2])$/.test(
+            !isValidBillingMonth(
                 billing_month
             )
         ) {
 
-            const error =
-                new app_error();
-
-            error.create(
-                'billing_month must be in YYYY-MM format',
-                400,
-                http_status_text.FAIL
+            return next(
+                createError(
+                    'billing_month must be in YYYY-MM format',
+                    400
+                )
             );
 
-            return next(error);
         }
 
 
+        // =============================================
+        // Validate Discounts
+        // =============================================
+
+        if (
+            !Array.isArray(
+                discounts
+            )
+        ) {
+
+            return next(
+                createError(
+                    'discounts must be an array',
+                    400
+                )
+            );
+
+        }
+
+
+        // =============================================
+        // Check Family
+        // =============================================
+
+        const familyDoc =
+            await Family.findById(
+                family
+            );
+
+
+        if (!familyDoc) {
+
+            return next(
+                createError(
+                    'family not found',
+                    404
+                )
+            );
+
+        }
+
+
+        if (
+            familyDoc.is_active === false
+        ) {
+
+            return next(
+                createError(
+                    'family is inactive',
+                    400
+                )
+            );
+
+        }
+
+
+        // =============================================
+        // Invoice Items
+        // =============================================
+
         const invoiceItems = [];
+
 
         let totalAmount = 0;
 
 
+        const {
+            monthStart,
+            nextMonth
+        } =
+            getMonthRange(
+                billing_month
+            );
+
+
         // =================================================
-        // Process each student subject
+        // Process Each Student Subject
         // =================================================
 
-        for (const item of items) {
+        for (
+            const item
+            of items
+        ) {
 
             const {
                 student_assignment,
@@ -105,21 +389,22 @@ const createInvoice = AsyncWrapper(
             } = item;
 
 
+            // =========================================
+            // Validate IDs
+            // =========================================
+
             if (
                 !student_assignment ||
                 !student_subject
             ) {
 
-                const error =
-                    new app_error();
-
-                error.create(
-                    'student_assignment and student_subject are required',
-                    400,
-                    http_status_text.FAIL
+                return next(
+                    createError(
+                        'student_assignment and student_subject are required',
+                        400
+                    )
                 );
 
-                return next(error);
             }
 
 
@@ -136,16 +421,13 @@ const createInvoice = AsyncWrapper(
 
             if (!studentAssignment) {
 
-                const error =
-                    new app_error();
-
-                error.create(
-                    'you cannot access this student',
-                    403,
-                    http_status_text.FAIL
+                return next(
+                    createError(
+                        'you cannot access this student',
+                        403
+                    )
                 );
 
-                return next(error);
             }
 
 
@@ -162,113 +444,64 @@ const createInvoice = AsyncWrapper(
 
             if (!studentSubject) {
 
-                const error =
-                    new app_error();
-
-                error.create(
-                    'student subject not found or you cannot access it',
-                    404,
-                    http_status_text.FAIL
+                return next(
+                    createError(
+                        'student subject not found or you cannot access it',
+                        404
+                    )
                 );
 
-                return next(error);
             }
 
 
             // =========================================
-            // Student Subject belongs to student
+            // Student Subject belongs to Student
             // =========================================
 
             if (
                 String(
                     studentSubject.student_assignment
                 ) !==
-                String(student_assignment)
+                String(
+                    student_assignment
+                )
             ) {
 
-                const error =
-                    new app_error();
-
-                error.create(
-                    'student subject does not belong to this student',
-                    400,
-                    http_status_text.FAIL
+                return next(
+                    createError(
+                        'student subject does not belong to this student',
+                        400
+                    )
                 );
 
-                return next(error);
             }
 
 
             // =========================================
-            // Family Check
+            // Student belongs to Family
             // =========================================
 
             if (
                 String(
                     studentAssignment.family
                 ) !==
-                String(family)
+                String(
+                    family
+                )
             ) {
 
-                const error =
-                    new app_error();
-
-                error.create(
-                    'student does not belong to this family',
-                    400,
-                    http_status_text.FAIL
+                return next(
+                    createError(
+                        'student does not belong to this family',
+                        400
+                    )
                 );
 
-                return next(error);
             }
 
 
             // =========================================
             // Get Completed Lessons
-            //
-            // Only lessons that:
-            //
-            // 1. belong to this academy
-            // 2. belong to this student
-            // 3. belong to this student subject
-            // 4. are completed
-            // 5. are inside billing month
-            //
-            // AND have not already been invoiced
-            // =========================================
-
-            const [year, month] =
-                billing_month
-                    .split('-')
-                    .map(Number);
-
-
-            const monthStart =
-                new Date(
-                    year,
-                    month - 1,
-                    1,
-                    0,
-                    0,
-                    0,
-                    0
-                );
-
-
-            const nextMonth =
-                new Date(
-                    year,
-                    month,
-                    1,
-                    0,
-                    0,
-                    0,
-                    0
-                );
-
-
-            // =========================================
-            // Find lessons
             // =========================================
 
             const lessons =
@@ -286,26 +519,33 @@ const createInvoice = AsyncWrapper(
                         'completed',
 
                     lesson_date: {
+
                         $gte:
                             monthStart,
 
                         $lt:
                             nextMonth
+
                     }
 
                 }).sort({
+
                     lesson_date: 1
+
                 });
 
 
-            if (!lessons.length) {
+            if (
+                !lessons.length
+            ) {
 
                 continue;
+
             }
 
 
             // =========================================
-            // Remove already invoiced lessons
+            // Find Previously Invoiced Lessons
             // =========================================
 
             const previousInvoices =
@@ -313,24 +553,31 @@ const createInvoice = AsyncWrapper(
 
                     academy_id,
 
-                    'items.lessons':
-                        {
-                            $in:
-                                lessons.map(
-                                    lesson =>
-                                        lesson._id
-                                )
-                        },
+                    'items.lessons': {
+
+                        $in:
+                            lessons.map(
+                                lesson =>
+                                    lesson._id
+                            )
+
+                    },
 
                     status: {
+
                         $ne:
                             'cancelled'
+
                     }
 
                 }).select(
                     'items.lessons'
                 );
 
+
+            // =========================================
+            // Already Invoiced Lesson IDs
+            // =========================================
 
             const invoicedLessonIds =
                 new Set();
@@ -352,19 +599,33 @@ const createInvoice = AsyncWrapper(
                     ) {
 
                         invoicedLessonIds.add(
-                            String(lessonId)
+                            String(
+                                lessonId
+                            )
                         );
+
                     }
+
                 }
+
             }
 
 
+            // =========================================
+            // Uninvoiced Lessons
+            // =========================================
+
             const uninvoicedLessons =
                 lessons.filter(
+
                     lesson =>
+
                         !invoicedLessonIds.has(
-                            String(lesson._id)
+                            String(
+                                lesson._id
+                            )
                         )
+
                 );
 
 
@@ -373,11 +634,12 @@ const createInvoice = AsyncWrapper(
             ) {
 
                 continue;
+
             }
 
 
             // =========================================
-            // Calculate duration
+            // Calculate Total Minutes
             // =========================================
 
             let totalMinutes = 0;
@@ -392,22 +654,21 @@ const createInvoice = AsyncWrapper(
                     Number(
                         lesson.duration_minutes
                     );
+
             }
 
 
             // =========================================
-            // Convert minutes to hours
+            // Billing Hours
             // =========================================
 
             const billingHours =
-                totalMinutes / 60;
+                totalMinutes /
+                60;
 
 
             // =========================================
-            // Snapshot price
-            //
-            // price_per_lesson is now:
-            // PRICE PER HOUR
+            // Snapshot Hourly Price
             // =========================================
 
             const pricePerHour =
@@ -423,21 +684,18 @@ const createInvoice = AsyncWrapper(
                 pricePerHour < 0
             ) {
 
-                const error =
-                    new app_error();
-
-                error.create(
-                    'invalid student hourly price',
-                    400,
-                    http_status_text.FAIL
+                return next(
+                    createError(
+                        'invalid student hourly price',
+                        400
+                    )
                 );
 
-                return next(error);
             }
 
 
             // =========================================
-            // Calculate item total
+            // Item Total
             // =========================================
 
             const itemTotal =
@@ -446,7 +704,7 @@ const createInvoice = AsyncWrapper(
 
 
             // =========================================
-            // Add Invoice Item
+            // Add Item
             // =========================================
 
             invoiceItems.push({
@@ -470,74 +728,91 @@ const createInvoice = AsyncWrapper(
                     totalMinutes,
 
                 billing_hours:
-                    billingHours,
+                    Math.round(
+                        billingHours *
+                        10000
+                    ) / 10000,
 
                 price_per_lesson:
                     pricePerHour,
 
                 total:
-                    itemTotal
+                    Math.round(
+                        itemTotal *
+                        100
+                    ) / 100
 
             });
 
 
             totalAmount +=
                 itemTotal;
+
         }
 
 
-        // =========================================
-        // No lessons
-        // =========================================
+        // =============================================
+        // No Lessons
+        // =============================================
 
-        if (!invoiceItems.length) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'no unbilled completed lessons found for this billing month',
-                400,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-        }
-
-
-        // =========================================
-        // Round financial values
-        // =========================================
-
-        totalAmount =
-            Math.round(
-                totalAmount * 100
-            ) / 100;
-
-
-        for (
-            const item
-            of invoiceItems
+        if (
+            !invoiceItems.length
         ) {
 
-            item.billing_hours =
-                Math.round(
-                    item.billing_hours *
-                    10000
-                ) / 10000;
+            return next(
+                createError(
+                    'no unbilled completed lessons found for this billing month',
+                    400
+                )
+            );
 
-
-            item.total =
-                Math.round(
-                    item.total *
-                    100
-                ) / 100;
         }
 
 
-        // =========================================
+        // =============================================
+        // Round Total
+        // =============================================
+
+        totalAmount =
+            Number(
+                totalAmount.toFixed(2)
+            );
+
+
+        // =============================================
+        // Calculate Discounts
+        // =============================================
+
+        let discountResult;
+
+
+        try {
+
+            discountResult =
+                calculateDiscounts(
+                    totalAmount,
+                    discounts
+                );
+
+        }
+        catch (error) {
+
+            return next(error);
+
+        }
+
+
+        const totalDiscount =
+            discountResult.totalDiscount;
+
+
+        const finalAmount =
+            discountResult.finalAmount;
+
+
+        // =============================================
         // Create Invoice
-        // =========================================
+        // =============================================
 
         const invoice =
             await Invoice.create({
@@ -549,17 +824,30 @@ const createInvoice = AsyncWrapper(
                 items:
                     invoiceItems,
 
+                // قبل الخصم
                 total_amount:
                     totalAmount,
+
+                // إجمالي الخصومات
+                total_discount:
+                    totalDiscount,
+
+                // بعد الخصم
+                net_amount:
+                    finalAmount,
+
+                // الخصومات Snapshot
+                discounts:
+                    discountResult.discounts,
 
                 paid_amount:
                     0,
 
                 remaining_amount:
-                    totalAmount,
+                    finalAmount,
 
                 status:
-                    totalAmount === 0
+                    finalAmount === 0
                         ? 'paid'
                         : 'unpaid',
 
@@ -570,18 +858,25 @@ const createInvoice = AsyncWrapper(
             });
 
 
+        // =============================================
+        // Response
+        // =============================================
+
         return res.status(201).json({
 
             status:
                 http_status_text.SUCCESS,
 
             data: {
+
                 invoice
+
             }
 
         });
 
     }
+
 );
 
 
@@ -590,6 +885,7 @@ const createInvoice = AsyncWrapper(
 // =====================================================
 
 const getInvoices = AsyncWrapper(
+
     async (req, res, next) => {
 
         const academy_id =
@@ -597,37 +893,82 @@ const getInvoices = AsyncWrapper(
 
 
         const filter = {
+
             academy_id
+
         };
 
 
-        if (req.query.family) {
+        // =============================================
+        // Family Filter
+        // =============================================
+
+        if (
+            req.query.family
+        ) {
 
             filter.family =
                 req.query.family;
+
         }
 
 
-        if (req.query.billing_month) {
+        // =============================================
+        // Billing Month
+        // =============================================
+
+        if (
+            req.query.billing_month
+        ) {
+
+            if (
+                !isValidBillingMonth(
+                    req.query.billing_month
+                )
+            ) {
+
+                return next(
+                    createError(
+                        'billing_month must be in YYYY-MM format',
+                        400
+                    )
+                );
+
+            }
+
 
             filter.billing_month =
                 req.query.billing_month;
+
         }
 
 
-        if (req.query.status) {
+        // =============================================
+        // Status
+        // =============================================
+
+        if (
+            req.query.status
+        ) {
 
             filter.status =
                 req.query.status;
+
         }
 
 
+        // =============================================
+        // Get Invoices
+        // =============================================
+
         const invoices =
-            await Invoice.find(filter)
+            await Invoice.find(
+                filter
+            )
 
                 .populate(
                     'family',
-                    'name phone'
+                    'name phone is_active'
                 )
 
                 .populate(
@@ -643,7 +984,10 @@ const getInvoices = AsyncWrapper(
                 )
 
                 .sort({
-                    invoice_date: -1
+
+                    invoice_date:
+                        -1
+
                 });
 
 
@@ -653,12 +997,15 @@ const getInvoices = AsyncWrapper(
                 http_status_text.SUCCESS,
 
             data: {
+
                 invoices
+
             }
 
         });
 
     }
+
 );
 
 
@@ -667,6 +1014,7 @@ const getInvoices = AsyncWrapper(
 // =====================================================
 
 const getSingleInvoice = AsyncWrapper(
+
     async (req, res, next) => {
 
         const academy_id =
@@ -685,7 +1033,7 @@ const getSingleInvoice = AsyncWrapper(
 
                 .populate(
                     'family',
-                    'name phone'
+                    'name phone is_active'
                 )
 
                 .populate(
@@ -703,16 +1051,13 @@ const getSingleInvoice = AsyncWrapper(
 
         if (!invoice) {
 
-            const error =
-                new app_error();
-
-            error.create(
-                'invoice not found',
-                404,
-                http_status_text.FAIL
+            return next(
+                createError(
+                    'invoice not found',
+                    404
+                )
             );
 
-            return next(error);
         }
 
 
@@ -722,12 +1067,15 @@ const getSingleInvoice = AsyncWrapper(
                 http_status_text.SUCCESS,
 
             data: {
+
                 invoice
+
             }
 
         });
 
     }
+
 );
 
 
@@ -736,6 +1084,7 @@ const getSingleInvoice = AsyncWrapper(
 // =====================================================
 
 const cancelInvoice = AsyncWrapper(
+
     async (req, res, next) => {
 
         const academy_id =
@@ -755,16 +1104,13 @@ const cancelInvoice = AsyncWrapper(
 
         if (!invoice) {
 
-            const error =
-                new app_error();
-
-            error.create(
-                'invoice not found',
-                404,
-                http_status_text.FAIL
+            return next(
+                createError(
+                    'invoice not found',
+                    404
+                )
             );
 
-            return next(error);
         }
 
 
@@ -773,18 +1119,19 @@ const cancelInvoice = AsyncWrapper(
             'cancelled'
         ) {
 
-            const error =
-                new app_error();
-
-            error.create(
-                'invoice is already cancelled',
-                400,
-                http_status_text.FAIL
+            return next(
+                createError(
+                    'invoice is already cancelled',
+                    400
+                )
             );
 
-            return next(error);
         }
 
+
+        // =============================================
+        // Cannot Cancel Paid Invoice
+        // =============================================
 
         if (
             Number(
@@ -792,16 +1139,13 @@ const cancelInvoice = AsyncWrapper(
             ) > 0
         ) {
 
-            const error =
-                new app_error();
-
-            error.create(
-                'cannot cancel an invoice that has payments',
-                400,
-                http_status_text.FAIL
+            return next(
+                createError(
+                    'cannot cancel an invoice that has payments',
+                    400
+                )
             );
 
-            return next(error);
         }
 
 
@@ -822,14 +1166,21 @@ const cancelInvoice = AsyncWrapper(
                 http_status_text.SUCCESS,
 
             data: {
+
                 invoice
+
             }
 
         });
 
     }
+
 );
 
+
+// =====================================================
+// Exports
+// =====================================================
 
 module.exports = {
 

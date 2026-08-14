@@ -2,35 +2,90 @@ const mongoose = require('mongoose');
 
 
 // =====================================================
+// Invoice Discount
+//
+// Snapshot of discount at invoice creation time
+// =====================================================
+
+const InvoiceDiscountSchema =
+    new mongoose.Schema(
+        {
+            // =========================================
+            // Original Discount ID
+            // =========================================
+
+            discount: {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: 'FamilyDiscount',
+                required: true
+            },
+
+
+            // =========================================
+            // Percentage
+            // =========================================
+
+            percentage: {
+                type: Number,
+                required: true,
+                min: 0,
+                max: 100
+            },
+
+
+            // =========================================
+            // Reason
+            // =========================================
+
+            note: {
+                type: String,
+                required: true,
+                trim: true
+            },
+
+
+            // =========================================
+            // Actual Discount Amount
+            //
+            // Example:
+            //
+            // invoice total = 1000
+            // discount = 10%
+            //
+            // amount = 100
+            // =========================================
+
+            amount: {
+                type: Number,
+                required: true,
+                min: 0
+            }
+        },
+
+        {
+            _id: true
+        }
+    );
+
+
+// =====================================================
 // Invoice Item
 // =====================================================
 
 const InvoiceItemSchema =
     new mongoose.Schema(
         {
-            // =========================================
-            // الطالب داخل الأكاديمية
-            // =========================================
-
             student_assignment: {
                 type: mongoose.Schema.Types.ObjectId,
                 ref: 'StudentAssignment',
                 required: true
             },
 
-            // =========================================
-            // مادة الطالب
-            // =========================================
-
             student_subject: {
                 type: mongoose.Schema.Types.ObjectId,
                 ref: 'StudentSubject',
                 required: true
             },
-
-            // =========================================
-            // الحصص التي دخلت في الفاتورة
-            // =========================================
 
             lessons: [
                 {
@@ -39,19 +94,11 @@ const InvoiceItemSchema =
                 }
             ],
 
-            // =========================================
-            // عدد الحصص
-            // =========================================
-
             lessons_count: {
                 type: Number,
                 required: true,
                 min: 0
             },
-
-            // =========================================
-            // إجمالي الدقائق
-            // =========================================
 
             total_minutes: {
                 type: Number,
@@ -59,24 +106,11 @@ const InvoiceItemSchema =
                 min: 0
             },
 
-            // =========================================
-            // إجمالي الساعات
-            //
-            // مثال:
-            // 80 دقيقة = 1.333333 ساعة
-            // =========================================
-
             billing_hours: {
                 type: Number,
                 required: true,
                 min: 0
             },
-
-            // =========================================
-            // سعر الساعة وقت إنشاء الفاتورة
-            //
-            // Snapshot
-            // =========================================
 
             price_per_lesson: {
                 type: Number,
@@ -84,16 +118,13 @@ const InvoiceItemSchema =
                 min: 0
             },
 
-            // =========================================
-            // إجمالي البند
-            // =========================================
-
             total: {
                 type: Number,
                 required: true,
                 min: 0
             }
         },
+
         {
             _id: true
         }
@@ -108,7 +139,7 @@ const InvoiceSchema =
     new mongoose.Schema(
         {
             // =========================================
-            // الأكاديمية
+            // Academy
             // =========================================
 
             academy_id: {
@@ -117,18 +148,20 @@ const InvoiceSchema =
                 required: true
             },
 
+
             // =========================================
-            // الأسرة
+            // Family
             // =========================================
 
             family: {
                 type: mongoose.Schema.Types.ObjectId,
-                ref: 'User',
+                ref: 'Family',
                 required: true
             },
 
+
             // =========================================
-            // بنود الفاتورة
+            // Items
             // =========================================
 
             items: {
@@ -138,9 +171,7 @@ const InvoiceSchema =
 
                 validate: {
                     validator: function (value) {
-
                         return value.length > 0;
-
                     },
 
                     message:
@@ -148,38 +179,102 @@ const InvoiceSchema =
                 }
             },
 
+
             // =========================================
-            // إجمالي الفاتورة
+            // Total Before Discount
+            // =========================================
+
+            subtotal_amount: {
+                type: Number,
+
+                required: true,
+
+                min: 0
+            },
+
+
+            // =========================================
+            // Discounts Snapshot
+            // =========================================
+
+            discounts: {
+                type: [InvoiceDiscountSchema],
+
+                default: []
+            },
+
+
+            // =========================================
+            // Total Discount Percentage
+            // =========================================
+
+            discount_percentage: {
+                type: Number,
+
+                default: 0,
+
+                min: 0,
+
+                max: 100
+            },
+
+
+            // =========================================
+            // Total Discount Amount
+            // =========================================
+
+            discount_amount: {
+                type: Number,
+
+                default: 0,
+
+                min: 0
+            },
+
+
+            // =========================================
+            // Final Invoice Total
+            //
+            // subtotal - discount
             // =========================================
 
             total_amount: {
                 type: Number,
+
                 required: true,
+
                 min: 0
             },
 
+
             // =========================================
-            // المدفوع
+            // Paid
             // =========================================
 
             paid_amount: {
                 type: Number,
+
                 default: 0,
+
                 min: 0
             },
 
+
             // =========================================
-            // المتبقي
+            // Remaining
             // =========================================
 
             remaining_amount: {
                 type: Number,
+
                 required: true,
+
                 min: 0
             },
 
+
             // =========================================
-            // الحالة
+            // Status
             // =========================================
 
             status: {
@@ -195,10 +290,9 @@ const InvoiceSchema =
                 default: 'unpaid'
             },
 
+
             // =========================================
-            // الشهر
-            //
-            // YYYY-MM
+            // Billing Month
             // =========================================
 
             billing_month: {
@@ -210,24 +304,29 @@ const InvoiceSchema =
                     /^\d{4}-(0[1-9]|1[0-2])$/
             },
 
+
             // =========================================
-            // تاريخ الفاتورة
+            // Invoice Date
             // =========================================
 
             invoice_date: {
                 type: Date,
+
                 default: Date.now
             },
 
+
             // =========================================
-            // ملاحظات
+            // Notes
             // =========================================
 
             notes: {
                 type: String,
+
                 trim: true
             }
         },
+
         {
             timestamps: true
         }
