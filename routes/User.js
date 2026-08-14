@@ -6,6 +6,9 @@ const user_controller =
 const validate_password =
     require('../middleware/ValidatePassword');
 
+const verify_token = 
+    require('../middleware/VerifyToken');
+
 const router =
     express.Router();
 
@@ -33,6 +36,19 @@ router.route('/login')
         user_controller.login
     );
 
+// =====================================================
+// Logout
+
+// =====================================================
+
+ router.route('/logout')
+    .post(
+
+        verify_token,
+
+        user_controller.logout
+
+    );   
 
 module.exports = router;
 

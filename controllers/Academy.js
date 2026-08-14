@@ -16,7 +16,16 @@ const app_error =
 const http_status_text =
     require('../utils/HttpStatusText');
 
-const gen_token =
+const jwt =
+    require('jsonwebtoken');
+
+const crypto =
+    require('crypto');
+
+const BlacklistedToken =
+    require('../models/BlacklistedToken');
+
+    const gen_token =
     require('../utils/gen_token');
 
 const bcrypt =
@@ -303,6 +312,159 @@ const login = AsyncWrapper(
 
 );
 
+
+// =====================================================
+// Academy Logout
+// =====================================================
+
+const logout = AsyncWrapper(
+
+    async (req, res, next) => {
+
+        const auth_header =
+            req.headers['authorization'];
+
+
+        if (!auth_header) {
+
+            const error =
+                new app_error();
+
+            error.create(
+                'required token',
+                401,
+                http_status_text.ERROR
+            );
+
+            return next(error);
+        }
+
+
+        const parts =
+            auth_header.split(' ');
+
+
+        if (
+            parts.length !== 2 ||
+            parts[0] !== 'Bearer' ||
+            !parts[1]
+        ) {
+
+            const error =
+                new app_error();
+
+            error.create(
+                'invalid authorization header',
+                401,
+                http_status_text.ERROR
+            );
+
+            return next(error);
+        }
+
+
+        const token =
+            parts[1];
+
+
+        // =================================================
+        // Verify Token
+        // =================================================
+
+        let decoded;
+
+        try {
+
+            decoded =
+                jwt.verify(
+                    token,
+                    process.env.JWT_SECRET
+                );
+
+        } catch (error) {
+
+            const auth_error =
+                new app_error();
+
+            auth_error.create(
+                'invalid token',
+                401,
+                http_status_text.ERROR
+            );
+
+            return next(auth_error);
+        }
+
+
+        // =================================================
+        // Hash Token
+        // =================================================
+
+        const token_hash =
+            crypto
+                .createHash('sha256')
+                .update(token)
+                .digest('hex');
+
+
+        // =================================================
+        // Token Expiration
+        // =================================================
+
+        const expires_at =
+            new Date(
+                decoded.exp * 1000
+            );
+
+
+        // =================================================
+        // Add Token To Blacklist
+        // =================================================
+
+        await BlacklistedToken.findOneAndUpdate(
+
+            {
+                token_hash
+            },
+
+            {
+                token_hash,
+
+                expires_at
+
+            },
+
+            {
+                upsert:
+                    true,
+
+                new:
+                    true,
+
+                setDefaultsOnInsert:
+                    true
+            }
+
+        );
+
+
+        // =================================================
+        // Response
+        // =================================================
+
+        return res.status(200).json({
+
+            status:
+                http_status_text.SUCCESS,
+
+            message:
+                'logout successfully'
+
+        });
+
+    }
+
+);
 
 // =====================================================
 // Get Academy Profile
@@ -1029,6 +1191,8 @@ module.exports = {
     register,
 
     login,
+
+    logout,
 
     getMyAcademy,
 

@@ -1,5 +1,6 @@
 POST   /academy/register
 POST   /academy/login
+POST /academy/logout
 GET    /academy/me
 PATCH  /academy/me
 PATCH  /academy/change-password

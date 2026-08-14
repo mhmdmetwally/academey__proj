@@ -35,6 +35,18 @@ router.post(
     academy_controller.login
 );
 
+router.route('/logout')
+    .post(
+
+        verify_token,
+
+        allowed_tool(
+            user_role.academy_admin
+        ),
+
+        academy_controller.logout
+
+    );
 
 // =====================================================
 // Academy Admin
