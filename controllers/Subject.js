@@ -198,155 +198,51 @@ const createSubject =
 // Academy Admin / Supervisor / Teacher
 // =====================================================
 
-const getSubjects =
-    AsyncWrapper(
+const getSubjects = AsyncWrapper(async (req, res, next) => {
+    let academy_id;
 
-        async (req, res, next) => {
+    // 1. Academy Admin
+    if (req.user.role === user_role.academy_admin) {
+        academy_id = req.user.id;
+    }
+    
+    // 2. Supervisor (المشرف فقط)
+    else if (req.user.role === user_role.supervisor) {
+        academy_id = req.user.academy_id;
+    }
 
-            let academy_id;
-
-
-            // =========================================
-            // Academy Admin
-            // =========================================
-
-            if (
-                req.user.role ===
-                user_role.academy_admin
-            ) {
-
-                academy_id =
-                    req.user.id;
-
-            }
-
-
-            // =========================================
-            // Supervisor / Family
-            // =========================================
-
-            else if (
-                req.user.academy_id===user_role.supervisor
-            ) {
-
-                academy_id =
-                    req.user.academy_id;
-
-            }
-
-
-            // =========================================
-            // Teacher
-            // =========================================
-
-            else if (
-                req.user.role ===
-                user_role.teacher
-            ) {
-
-                academy_id =
-                    req.query.academy_id;
-
-            }
-
-
-            // =========================================
-            // Academy required
-            // =========================================
-
-            if (!academy_id) {
-
-                const error =
-                    new app_error();
-
-                error.create(
-                    'academy_id is required',
-                    400,
-                    http_status_text.FAIL
-                );
-
-                return next(error);
-            }
-
-
-            // =========================================
-            // Teacher security
-            // =========================================
-
-            if (
-                req.user.role ===
-                user_role.teacher
-            ) {
-
-                const teacher =
-                    await Teacher.findOne({
-
-                        user:
-                            req.user.id,
-
-                        academy_id:
-                            academy_id
-
-                    });
-
-
-                if (!teacher) {
-
-                    const error =
-                        new app_error();
-
-                    error.create(
-                        'you do not belong to this academy',
-                        403,
-                        http_status_text.FAIL
-                    );
-
-                    return next(error);
-                }
-
-            }
-
-
-            // =========================================
-            // Get subjects
-            // =========================================
-
-            const subjects =
-                await Subject.find({
-
-                    academy_id:
-                        academy_id
-
-                })
-                .populate(
-                    'teachers'
-                )
-                .populate(
-                    'academy_id',
-                    'academy_name academy_code'
-                )
-                .sort({
-                    createdAt: -1
-                });
-
-
-            return res.status(200).json({
-
-                status:
-                    http_status_text.SUCCESS,
-
-                data: {
-
-                    subjects
-
-                }
-
-            });
-
+    // 3. Teacher
+    else if (req.user.role === user_role.teacher) {
+        const teacher = await Teacher.findOne({ user: req.user.id });
+        if (teacher) {
+            academy_id = teacher.academy_id;
         }
+    }
 
-    );
+    // إذا لم يكن أي من الأدوار المسموحة أو لم يُعثر على academy_id
+    if (!academy_id) {
+        const error = new app_error();
+        error.create(
+            'Unauthorized or missing academy_id',
+            403,
+            http_status_text.FAIL
+        );
+        return next(error);
+    }
 
+    // جلب المواد الدراسية الخاصة بالأكاديمية
+    const subjects = await Subject.find({ academy_id: academy_id })
+        .populate('teachers')
+        .populate('academy_id', 'academy_name academy_code')
+        .sort({ createdAt: -1 });
+
+    return res.status(200).json({
+        status: http_status_text.SUCCESS,
+        data: {
+            subjects
+        }
+    });
+});
 
 // =====================================================
 // Get Single Subject
