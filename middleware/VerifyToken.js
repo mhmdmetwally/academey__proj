@@ -1,373 +1,133 @@
-const jwt =
-    require('jsonwebtoken');
+const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
+const app_error = require('../utils/AppError');
+const http_status_text = require('../utils/HttpStatusText');
 
-const moongose = require('mongoose');
+const Academy = require('../models/Academy');
+const Supervisor = require('../models/Supervisor');
+const User = require('../models/User');
+const user_role = require('../utils/UserRole');
 
-const app_error =
-    require('../utils/AppError');
-
-const http_status_text =
-    require('../utils/HttpStatusText');
-
-const Academy =
-    require('../models/Academy');
-
-const Supervisor =
-    require('../models/Supervisor');
-
-const User =
-    require('../models/User');
-
-const user_role =
-    require('../utils/UserRole');
-
-const JWT_SECRET =
-    process.env.JWT_SECRET;
-
+const JWT_SECRET = process.env.JWT_SECRET;
 
 // =====================================================
 // Verify Token
 // =====================================================
+const verify_token = async (req, res, next) => {
+    const auth_header = req.headers['authorization'];
 
-const verify_token = async (
-    req,
-    res,
-    next
-) => {
-
-    const auth_header =
-        req.headers['authorization'];
-
-
-    // =================================================
-    // Token Required
-    // =================================================
-
+    // 1. Token Required
     if (!auth_header) {
-
-        const error =
-            new app_error();
-
-        error.create(
-            'required token',
-            401,
-            http_status_text.ERROR
-        );
-
+        const error = new app_error();
+        error.create('required token', 401, http_status_text.ERROR);
         return next(error);
     }
 
-
-    // =================================================
-    // Bearer Token
-    // =================================================
-
-    const parts =
-        auth_header.split(' ');
-
-
-    if (
-        parts.length !== 2 ||
-        parts[0] !== 'Bearer' ||
-        !parts[1]
-    ) {
-
-        const error =
-            new app_error();
-
-        error.create(
-            'invalid authorization header',
-            401,
-            http_status_text.ERROR
-        );
-
+    // 2. Bearer Token Format
+    const parts = auth_header.split(' ');
+    if (parts.length !== 2 || parts[0] !== 'Bearer' || !parts[1]) {
+        const error = new app_error();
+        error.create('invalid authorization header', 401, http_status_text.ERROR);
         return next(error);
     }
 
+    const token = parts[1];
 
-    const token =
-        parts[1];
-
-
-    // =================================================
-    // Verify JWT
-    // =================================================
-
+    // 3. Verify JWT
     try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        const user = decoded.payload || decoded;
 
-        const decoded =
-            jwt.verify(
-                token,
-                JWT_SECRET
-            );
-
-
-        /*
-        لو login بيعمل:
-
-        jwt.sign({
-            id,
-            role
-        }, JWT_SECRET)
-
-        يبقى decoded هو الـ payload مباشرة.
-
-        ولو عندك payload داخل payload
-        هنستخدم decoded.payload.
-        */
-
-        const user =
-            decoded.payload ||
-            decoded;
-
-
-        if (
-            !user.id ||
-            !user.role
-        ) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'invalid token payload',
-                401,
-                http_status_text.ERROR
-            );
-
+        if (!user.id || !user.role) {
+            const error = new app_error();
+            error.create('invalid token payload', 401, http_status_text.ERROR);
             return next(error);
         }
 
+        let detected_academy_id = user.academy_id;
 
-        // =================================================
-        // Check Current Active Status
-        // From Database
-        // =================================================
-
-        if (
-            user.role ===
-            user_role.academy_admin
-        ) {
-
-            const academy =
-                await Academy.findById(
-                    user.id
-                ).select(
-                    '_id is_active'
-                );
-
+        // --- Academy Admin ---
+        if (user.role === user_role.academy_admin) {
+            const academy = await Academy.findById(user.id).select('_id is_active');
 
             if (!academy) {
-
-                const error =
-                    new app_error();
-
-                error.create(
-                    'academy not found',
-                    401,
-                    http_status_text.ERROR
-                );
-
+                const error = new app_error();
+                error.create('academy not found', 401, http_status_text.ERROR);
                 return next(error);
             }
 
-
-            if (
-                academy.is_active !== true
-            ) {
-
-                const error =
-                    new app_error();
-
-                error.create(
-                    'academy is not active',
-                    403,
-                    http_status_text.FAIL
-                );
-
+            if (academy.is_active !== true) {
+                const error = new app_error();
+                error.create('academy is not active', 403, http_status_text.FAIL);
                 return next(error);
             }
 
+            detected_academy_id = academy._id;
         }
 
-
-        // =================================================
-        // Supervisor
-        // =================================================
-
-        else if (
-            user.role ===
-            user_role.supervisor
-        ) {
-
-            const supervisor =
-                await Supervisor.findOne({
-
-                    user:
-                        user.id,
-
-                    is_active:
-                        true
-
-                }).select(
-                    '_id user academy_id is_active'
-                );
-
+        // --- Supervisor ---
+        else if (user.role === user_role.supervisor) {
+            const supervisor = await Supervisor.findOne({
+                user: user.id,
+                is_active: true
+            }).select('_id user academy_id is_active');
 
             if (!supervisor) {
-
-                const error =
-                    new app_error();
-
-                error.create(
-                    'supervisor is not active',
-                    403,
-                    http_status_text.FAIL
-                );
-
+                const error = new app_error();
+                error.create('supervisor is not active', 403, http_status_text.FAIL);
                 return next(error);
             }
-            req.user.academy_id = supervisor.academy_id;
 
+            // ✅ حفظ القيمة في المتغير المخصص
+            detected_academy_id = supervisor.academy_id;
         }
 
-
-        // =================================================
-        // User / Family
-        // =================================================
-
-        else if (
-            user.role ===
-            user_role.user
-        ) {
-
-            const current_user =
-                await User.findById(
-                    user.id
-                ).select(
-                    '_id is_active'
-                );
-
+        // --- User / Family ---
+        else if (user.role === user_role.user) {
+            const current_user = await User.findById(user.id).select('_id is_active academy_id');
 
             if (!current_user) {
-
-                const error =
-                    new app_error();
-
-                error.create(
-                    'user not found',
-                    401,
-                    http_status_text.ERROR
-                );
-
+                const error = new app_error();
+                error.create('user not found', 401, http_status_text.ERROR);
                 return next(error);
             }
 
-
-            if (
-                current_user.is_active !== true
-            ) {
-
-                const error =
-                    new app_error();
-
-                error.create(
-                    'user is not active',
-                    403,
-                    http_status_text.FAIL
-                );
-
+            if (current_user.is_active !== true) {
+                const error = new app_error();
+                error.create('user is not active', 403, http_status_text.FAIL);
                 return next(error);
             }
 
+            detected_academy_id = current_user.academy_id || detected_academy_id;
         }
 
-
-        // =================================================
-        // Super Admin
-        // =================================================
-
-        else if (
-            user.role ===
-            user_role.super_admin
-        ) {
-
-            /*
-            Super Admin ليس مرتبطًا بـ
-            Academy.is_active
-
-            لذلك لا نعمل له check هنا.
-            */
-
+        // --- Super Admin ---
+        else if (user.role === user_role.super_admin) {
+            // No action needed
         }
 
-
-        // =================================================
-        // Unknown Role
-        // =================================================
-
+        // --- Unknown Role ---
         else {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'invalid user role',
-                403,
-                http_status_text.FAIL
-            );
-
+            const error = new app_error();
+            error.create('invalid user role', 403, http_status_text.FAIL);
             return next(error);
         }
 
-
-        // =================================================
-        // Save User Data
-        // =================================================
-
-        /*
-        مهم:
-
-        لا نأخذ is_active من الـ token.
-
-        لأن الـ token ممكن يكون قديم.
-
-        نضع فقط البيانات الأساسية.
-        */
-
+        // 4. Save User Data to Request Object safely
         req.user = {
-
-            id:
-                user.id,
-
-            role:
-                user.role,
-
-            academy_id:
-                user.academy_id
-
+            id: user.id,
+            role: user.role,
+            academy_id: detected_academy_id
         };
-
 
         return next();
 
-
     } catch (error) {
-
-        const auth_error =
-            new app_error();
-
-        auth_error.create(
-            'invalid token',
-            401,
-            http_status_text.ERROR
-        );
-
+        // لو التوكن منتهي أو غير صالح فقط
+        const auth_error = new app_error();
+        auth_error.create('invalid token', 401, http_status_text.ERROR);
         return next(auth_error);
     }
-
 };
 
-
-module.exports =
-    verify_token;
+module.exports = verify_token;
