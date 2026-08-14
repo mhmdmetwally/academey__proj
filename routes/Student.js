@@ -44,6 +44,16 @@ router.route('/')
         student_controller.getAcademyStudents
     );
 
+// Get Academy Single-Student
+router.route('/:student_id')
+    .get(
+        verify_token,
+        allowed_tool(
+            user_role.academy_admin
+        ),
+        student_controller.getAcademyStudents
+    );
+
 
 // Student gets his academies
 router.route('/my-academies')
