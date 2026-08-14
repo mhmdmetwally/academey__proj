@@ -678,17 +678,18 @@ const changeStudentTeacher =
             // =========================================
 
             const teacherExists =
-                subject.teachers.some(
+            subject.teachers.some(
 
-                    teacher_id =>
-                        String(
-                            teacher_id
-                        ) ===
-                        String(
-                            teacherAssignment.teacher
-                        )
+                teacherAssignmentId =>
 
-                );
+                    String(
+                        teacherAssignmentId
+                    ) ===
+                    String(
+                        teacherAssignment._id
+                    )
+
+            );
 
 
             if (!teacherExists) {
