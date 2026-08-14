@@ -13,6 +13,8 @@ const Subject =
 const Teacher =
     require('../models/Teacher');
 
+const TeacherAssignment =
+    require('../models/TeacherAssignment');
 
 const app_error =
     require('../utils/AppError');
@@ -24,6 +26,7 @@ const http_status_text =
 
 const user_role =
     require('../utils/UserRole');
+const TeacherAssignment = require('../models/TeacherAssignment');
 
 
 // =====================================================
@@ -747,7 +750,7 @@ const addTeacherToSubject =
             // =========================================
 
             const teacher =
-                await Teacher.findOne({
+                await TeacherAssignment.findOne({
 
                     _id:
                         teacher_id,
