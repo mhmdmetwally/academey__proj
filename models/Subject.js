@@ -18,7 +18,7 @@ const SubjectSchema = new mongoose.Schema(
         teachers: [
             {
                 type: mongoose.Schema.Types.ObjectId,
-                ref: 'Teacher'
+                ref: 'TeacherAssignment'
             }
         ],
         // السعر الافتراضي للحصة في الأكاديمية
