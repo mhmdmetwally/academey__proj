@@ -234,9 +234,6 @@ const createStudent = AsyncWrapper(
                 _id:
                     family_id,
 
-                role:
-                    user_role.family
-
             });
 
         if (!family) {
