@@ -7,11 +7,101 @@ const Supervisor =
 const StudentAssignment =
     require('../models/StudentAssignment');
 
+const Academy =
+    require('../models/Academy');
+
 const app_error =
     require('../utils/AppError');
 
 const http_status_text =
     require('../utils/HttpStatusText');
+
+
+// =====================================================
+// Get My Academies
+// =====================================================
+
+const getMyAcademies = AsyncWrapper(
+
+    async (req, res, next) => {
+
+        const user_id =
+            req.user.id;
+
+
+        // =================================================
+        // Get all active supervisor assignments
+        // =================================================
+
+        const supervisor_assignments =
+            await Supervisor.find({
+
+                user: user_id,
+
+                is_active: true
+
+            }).select('academy_id');
+
+
+        if (!supervisor_assignments.length) {
+
+            const error =
+                new app_error();
+
+            error.create(
+                'supervisor assignments not found',
+                404,
+                http_status_text.FAIL
+            );
+
+            return next(error);
+        }
+
+
+        // =================================================
+        // Extract Academy IDs
+        // =================================================
+
+        const academy_ids =
+            supervisor_assignments.map(
+                item => item.academy_id
+            );
+
+
+        // =================================================
+        // Get Academies
+        // =================================================
+
+        const academies =
+            await Academy.find({
+
+                _id: {
+                    $in: academy_ids
+                },
+
+                is_active: true
+
+            }).select(
+                'academy_name academy_code is_active'
+            );
+
+
+        return res.status(200).json({
+
+            status:
+                http_status_text.SUCCESS,
+
+            data: {
+
+                academies
+
+            }
+
+        });
+
+    }
+
+);
 
 
 // =====================================================
@@ -90,6 +180,7 @@ const getMyStudents = AsyncWrapper(
         });
 
     }
+
 );
 
 
@@ -191,10 +282,13 @@ const getSingleStudent =
             });
 
         }
+
     );
 
 
 module.exports = {
+
+    getMyAcademies,
 
     getMyStudents,
 

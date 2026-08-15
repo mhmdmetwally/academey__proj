@@ -37,6 +37,24 @@ router.post(
 
 );
 
+// =====================================================
+// Academy Admin Gets All Families
+// =====================================================
+
+router.get(
+
+    '/academy-families',
+
+    verify_token,
+
+    allowed_tool(
+        user_role.academy_admin
+    ),
+
+    family_controller.getAcademyFamilies
+
+);
+
 
 module.exports =
     router;

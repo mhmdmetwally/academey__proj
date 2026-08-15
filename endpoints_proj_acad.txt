@@ -25,7 +25,9 @@ GET    /student/my-academies
 GET    /student/:student_id
 PATCH  /student/:student_id
 
-POST   /family
+POST  /family
+GET   /family/academy-families
+
 
 POST   /teacher
 GET    /teacher/my-teachers
@@ -33,6 +35,11 @@ GET    /teacher/my-teachers/:teacher_id
 GET    /teacher/academy-teachers
 GET    /teacher/academy-teachers/:teacher_id
 PATCH  /teacher/:teacher_id
+
+GET /supervisor/my-academies
+GET /supervisor/my-students
+GET /supervisor/student/:student_id
+
 
 PATCH /teacher-payroll/:payroll_id/discount
 PATCH /teacher-payroll/:payroll_id/bonus

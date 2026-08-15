@@ -4,6 +4,10 @@ const AsyncWrapper =
 const Family =
     require('../models/Family');
 
+const StudentAssignment =
+    require('../models/StudentAssignment');
+
+
 const app_error =
     require('../utils/AppError');
 
@@ -119,8 +123,72 @@ const createFamily = AsyncWrapper(
 );
 
 
+// =====================================================
+// Academy Admin Gets All Families
+// =====================================================
+
+const getAcademyFamilies = AsyncWrapper(
+
+    async (req, res, next) => {
+
+        const academy_id =
+            req.user.id;
+
+
+        const families =
+            await StudentAssignment
+                .find({
+
+                    academy_id,
+
+                    is_active:
+                        true
+
+                })
+
+                .distinct('family');
+
+
+        const result =
+            await Family.find({
+
+                _id:
+                    {
+                        $in:
+                            families
+                    },
+
+                is_active:
+                    true
+
+            });
+
+
+        return res.status(200).json({
+
+            status:
+                http_status_text.SUCCESS,
+
+            results:
+                result.length,
+
+            data: {
+
+                families:
+                    result
+
+            }
+
+        });
+
+    }
+
+);
+
 module.exports = {
 
-    createFamily
+    createFamily,
+
+    getAcademyFamilies
 
 };

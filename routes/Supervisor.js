@@ -17,6 +17,25 @@ const verify_token =
     require('../middleware/VerifyToken');
 
 
+// =====================================================
+// Supervisor gets his academies
+// =====================================================
+
+router.route('/my-academies')
+    .get(
+
+        verify_token,
+
+        allowed_tool(
+            user_role.supervisor
+        ),
+
+        supervisor_controller.getMyAcademies
+
+    );
+
+
+
 // Supervisor gets his students
 
 router.route('/my-students')
