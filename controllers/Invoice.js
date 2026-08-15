@@ -7,11 +7,14 @@ const Invoice =
 const Family =
     require('../models/Family');
 
-const StudentSubject =
-    require('../models/StudentSubject');
+const FamilyDiscount =
+    require('../models/FamilyDiscount');
 
 const StudentAssignment =
     require('../models/StudentAssignment');
+
+const StudentSubject =
+    require('../models/StudentSubject');
 
 const Lesson =
     require('../models/Lesson');
@@ -23,222 +26,47 @@ const http_status_text =
     require('../utils/HttpStatusText');
 
 const {
+    isValidBillingMonth,
+    getMonthRange
+} =
+    require('../utils/Billing');
+
+const {
     getAcademyId,
     getStudentAssignmentForUser,
     getStudentSubjectForUser
 } = require('../utils/AccessScope');
 
 
-// =====================================================
-// Helper: Create Error
-// =====================================================
-
-const createError = (
-    message,
-    statusCode
-) => {
-
-    const error =
-        new app_error();
-
-    error.create(
-        message,
-        statusCode,
-        http_status_text.FAIL
-    );
-
-    return error;
-};
-
-
-// =====================================================
-// Helper: Validate Billing Month
-// =====================================================
-
-const isValidBillingMonth = (
-    billing_month
-) => {
-
-    return /^\d{4}-(0[1-9]|1[0-2])$/.test(
-        billing_month
-    );
-
-};
-
-
-// =====================================================
-// Helper: Get Month Range
-// =====================================================
-
-const getMonthRange = (
-    billing_month
-) => {
-
-    const [
-        year,
-        month
-    ] =
-        billing_month
-            .split('-')
-            .map(Number);
-
-
-    const monthStart =
-        new Date(
-            year,
-            month - 1,
-            1,
-            0,
-            0,
-            0,
-            0
-        );
-
-
-    const nextMonth =
-        new Date(
-            year,
-            month,
-            1,
-            0,
-            0,
-            0,
-            0
-        );
-
-
-    return {
-        monthStart,
-        nextMonth
-    };
-
-};
-
-
-// =====================================================
-// Helper: Calculate Discounts
-//
-// كل خصم نسبة مئوية مستقلة
-//
-// مثال:
-//
-// total = 1000
-//
-// discount 1 = 10%
-// discount 2 = 5%
-//
-// يتم تطبيق الخصومات بالتتابع:
-//
-// 1000 - 10% = 900
-// 900 - 5% = 855
-//
-// وليس 1000 - 15%
-//
-// =====================================================
-
-const calculateDiscounts = (
-    totalAmount,
-    discounts
-) => {
-
-    let currentAmount =
-        Number(totalAmount);
-
-
-    const discountSnapshots = [];
-
-
-    for (
-        const discount
-        of discounts
-    ) {
-
-        const percentage =
-            Number(
-                discount.percentage
-            );
-
-
-        if (
-            Number.isNaN(
-                percentage
-            ) ||
-            percentage <= 0 ||
-            percentage > 100
-        ) {
-
-            throw createError(
-                'discount percentage must be greater than 0 and less than or equal to 100',
-                400
-            );
-
-        }
-
-
-        const beforeAmount =
-            currentAmount;
-
-
-        const discountAmount =
-            Number(
-                (
-                    currentAmount *
-                    percentage /
-                    100
-                ).toFixed(2)
-            );
-
-
-        currentAmount =
-            Number(
-                (
-                    currentAmount -
-                    discountAmount
-                ).toFixed(2)
-            );
-
-
-        discountSnapshots.push({
-
-            percentage,
-
-            amount:
-                discountAmount,
-
-            reason:
-                discount.reason ||
-                null
-
-        });
-
-    }
-
-
-    return {
-
-        discounts:
-            discountSnapshots,
-
-        totalDiscount:
-            Number(
-                (
-                    totalAmount -
-                    currentAmount
-                ).toFixed(2)
-            ),
-
-        finalAmount:
-            Number(
-                currentAmount.toFixed(2)
-            )
-
-    };
-
-};
-
 
 // =====================================================
 // Create Invoice
+//
+// Creates ONE monthly invoice for the whole family.
+//
+// Body:
+//
+// {
+//     "family": "FAMILY_ID",
+//     "billing_month": "2026-08",
+//     "notes": "August 2026 invoice"
+// }
+//
+// The server automatically gets:
+//
+// Family
+//   ↓
+// StudentAssignments
+//   ↓
+// StudentSubjects
+//   ↓
+// Completed Lessons
+//   ↓
+// Unbilled Lessons
+//   ↓
+// Family Discounts
+//   ↓
+// Invoice
 // =====================================================
 
 const createInvoice = AsyncWrapper(
@@ -251,9 +79,7 @@ const createInvoice = AsyncWrapper(
 
         const {
             family,
-            items,
             billing_month,
-            discounts = [],
             notes
         } = req.body;
 
@@ -264,18 +90,19 @@ const createInvoice = AsyncWrapper(
 
         if (
             !family ||
-            !items ||
-            !items.length ||
             !billing_month
         ) {
 
-            return next(
-                createError(
-                    'family, items and billing_month are required',
-                    400
-                )
+            const error =
+                new app_error();
+
+            error.create(
+                'family and billing_month are required',
+                400,
+                http_status_text.FAIL
             );
 
+            return next(error);
         }
 
 
@@ -289,33 +116,16 @@ const createInvoice = AsyncWrapper(
             )
         ) {
 
-            return next(
-                createError(
-                    'billing_month must be in YYYY-MM format',
-                    400
-                )
+            const error =
+                new app_error();
+
+            error.create(
+                'billing_month must be in YYYY-MM format',
+                400,
+                http_status_text.FAIL
             );
 
-        }
-
-
-        // =============================================
-        // Validate Discounts
-        // =============================================
-
-        if (
-            !Array.isArray(
-                discounts
-            )
-        ) {
-
-            return next(
-                createError(
-                    'discounts must be an array',
-                    400
-                )
-            );
-
+            return next(error);
         }
 
 
@@ -331,13 +141,16 @@ const createInvoice = AsyncWrapper(
 
         if (!familyDoc) {
 
-            return next(
-                createError(
-                    'family not found',
-                    404
-                )
+            const error =
+                new app_error();
+
+            error.create(
+                'family not found',
+                404,
+                http_status_text.FAIL
             );
 
+            return next(error);
         }
 
 
@@ -345,25 +158,22 @@ const createInvoice = AsyncWrapper(
             familyDoc.is_active === false
         ) {
 
-            return next(
-                createError(
-                    'family is inactive',
-                    400
-                )
+            const error =
+                new app_error();
+
+            error.create(
+                'family is inactive',
+                400,
+                http_status_text.FAIL
             );
 
+            return next(error);
         }
 
 
         // =============================================
-        // Invoice Items
+        // Get Month Range
         // =============================================
-
-        const invoiceItems = [];
-
-
-        let totalAmount = 0;
-
 
         const {
             monthStart,
@@ -374,440 +184,574 @@ const createInvoice = AsyncWrapper(
             );
 
 
-        // =================================================
-        // Process Each Student Subject
-        // =================================================
+        // =============================================
+        // Get All Active Student Assignments
+        // For This Family + Academy
+        // =============================================
 
-        for (
-            const item
-            of items
+        const studentAssignments =
+            await StudentAssignment.find({
+
+                academy_id,
+
+                family,
+
+                is_active:
+                    true
+
+            });
+
+
+        if (
+            !studentAssignments.length
         ) {
 
-            const {
-                student_assignment,
-                student_subject
-            } = item;
+            const error =
+                new app_error();
 
+            error.create(
+                'no active students found for this family in this academy',
+                400,
+                http_status_text.FAIL
+            );
+
+            return next(error);
+        }
+
+
+        // =============================================
+        // Invoice Items
+        // =============================================
+
+        const invoiceItems = [];
+
+
+        let subtotalAmount = 0;
+
+
+        // =============================================
+        // Process Every Student Assignment
+        // =============================================
+
+        for (
+            const studentAssignment
+            of studentAssignments
+        ) {
 
             // =========================================
-            // Validate IDs
+            // Access Check
+            //
+            // Academy Admin:
+            //   gets the assignment
+            //
+            // Supervisor:
+            //   only gets his own students
             // =========================================
 
-            if (
-                !student_assignment ||
-                !student_subject
-            ) {
-
-                return next(
-                    createError(
-                        'student_assignment and student_subject are required',
-                        400
-                    )
-                );
-
-            }
-
-
-            // =========================================
-            // Student Access
-            // =========================================
-
-            const studentAssignment =
+            const accessibleStudent =
                 await getStudentAssignmentForUser(
                     req,
-                    student_assignment
+                    studentAssignment._id
                 );
 
 
-            if (!studentAssignment) {
+            if (!accessibleStudent) {
 
-                return next(
-                    createError(
-                        'you cannot access this student',
-                        403
-                    )
-                );
-
+                continue;
             }
 
 
             // =========================================
-            // Student Subject Access
+            // Get All Active Subjects
+            // For This Student
             // =========================================
 
-            const studentSubject =
-                await getStudentSubjectForUser(
-                    req,
-                    student_subject
-                );
-
-
-            if (!studentSubject) {
-
-                return next(
-                    createError(
-                        'student subject not found or you cannot access it',
-                        404
-                    )
-                );
-
-            }
-
-
-            // =========================================
-            // Student Subject belongs to Student
-            // =========================================
-
-            if (
-                String(
-                    studentSubject.student_assignment
-                ) !==
-                String(
-                    student_assignment
-                )
-            ) {
-
-                return next(
-                    createError(
-                        'student subject does not belong to this student',
-                        400
-                    )
-                );
-
-            }
-
-
-            // =========================================
-            // Student belongs to Family
-            // =========================================
-
-            if (
-                String(
-                    studentAssignment.family
-                ) !==
-                String(
-                    family
-                )
-            ) {
-
-                return next(
-                    createError(
-                        'student does not belong to this family',
-                        400
-                    )
-                );
-
-            }
-
-
-            // =========================================
-            // Get Completed Lessons
-            // =========================================
-
-            const lessons =
-                await Lesson.find({
+            const studentSubjects =
+                await StudentSubject.find({
 
                     academy_id,
 
                     student_assignment:
-                        student_assignment,
+                        studentAssignment._id,
 
-                    student_subject:
-                        student_subject,
-
-                    status:
-                        'completed',
-
-                    lesson_date: {
-
-                        $gte:
-                            monthStart,
-
-                        $lt:
-                            nextMonth
-
-                    }
-
-                }).sort({
-
-                    lesson_date: 1
+                    is_active:
+                        true
 
                 });
 
 
-            if (
-                !lessons.length
-            ) {
-
-                continue;
-
-            }
-
-
             // =========================================
-            // Find Previously Invoiced Lessons
+            // Process Every Subject
             // =========================================
-
-            const previousInvoices =
-                await Invoice.find({
-
-                    academy_id,
-
-                    'items.lessons': {
-
-                        $in:
-                            lessons.map(
-                                lesson =>
-                                    lesson._id
-                            )
-
-                    },
-
-                    status: {
-
-                        $ne:
-                            'cancelled'
-
-                    }
-
-                }).select(
-                    'items.lessons'
-                );
-
-
-            // =========================================
-            // Already Invoiced Lesson IDs
-            // =========================================
-
-            const invoicedLessonIds =
-                new Set();
-
 
             for (
-                const previousInvoice
-                of previousInvoices
+                const studentSubject
+                of studentSubjects
             ) {
 
+                // =====================================
+                // Get Completed Lessons
+                // For This Month
+                // =====================================
+
+                const lessons =
+                    await Lesson.find({
+
+                        academy_id,
+
+                        student_assignment:
+                            studentAssignment._id,
+
+                        student_subject:
+                            studentSubject._id,
+
+                        status:
+                            'completed',
+
+                        lesson_date: {
+
+                            $gte:
+                                monthStart,
+
+                            $lt:
+                                nextMonth
+
+                        }
+
+                    }).sort({
+
+                        lesson_date: 1
+
+                    });
+
+
+                if (
+                    !lessons.length
+                ) {
+
+                    continue;
+                }
+
+
+                // =====================================
+                // Find Previously Invoiced Lessons
+                //
+                // Only non-cancelled invoices count.
+                // =====================================
+
+                const previousInvoices =
+                    await Invoice.find({
+
+                        academy_id,
+
+                        family,
+
+                        'items.lessons': {
+
+                            $in:
+                                lessons.map(
+                                    lesson =>
+                                        lesson._id
+                                )
+
+                        },
+
+                        status: {
+
+                            $ne:
+                                'cancelled'
+
+                        }
+
+                    }).select(
+                        'items.lessons'
+                    );
+
+
+                // =====================================
+                // Already Invoiced Lesson IDs
+                // =====================================
+
+                const invoicedLessonIds =
+                    new Set();
+
+
                 for (
-                    const invoiceItem
-                    of previousInvoice.items
+                    const previousInvoice
+                    of previousInvoices
                 ) {
 
                     for (
-                        const lessonId
-                        of invoiceItem.lessons
+                        const invoiceItem
+                        of previousInvoice.items
                     ) {
 
-                        invoicedLessonIds.add(
-                            String(
-                                lessonId
-                            )
-                        );
+                        for (
+                            const lessonId
+                            of invoiceItem.lessons
+                        ) {
+
+                            invoicedLessonIds.add(
+                                String(
+                                    lessonId
+                                )
+                            );
+
+                        }
 
                     }
 
                 }
 
-            }
 
+                // =====================================
+                // Keep Only Unbilled Lessons
+                // =====================================
 
-            // =========================================
-            // Uninvoiced Lessons
-            // =========================================
+                const uninvoicedLessons =
+                    lessons.filter(
 
-            const uninvoicedLessons =
-                lessons.filter(
+                        lesson =>
 
-                    lesson =>
-
-                        !invoicedLessonIds.has(
-                            String(
-                                lesson._id
+                            !invoicedLessonIds.has(
+                                String(
+                                    lesson._id
+                                )
                             )
-                        )
 
-                );
-
-
-            if (
-                !uninvoicedLessons.length
-            ) {
-
-                continue;
-
-            }
-
-
-            // =========================================
-            // Calculate Total Minutes
-            // =========================================
-
-            let totalMinutes = 0;
-
-
-            for (
-                const lesson
-                of uninvoicedLessons
-            ) {
-
-                totalMinutes +=
-                    Number(
-                        lesson.duration_minutes
                     );
 
+
+                if (
+                    !uninvoicedLessons.length
+                ) {
+
+                    continue;
+                }
+
+
+                // =====================================
+                // Calculate Total Minutes
+                // =====================================
+
+                let totalMinutes = 0;
+
+
+                for (
+                    const lesson
+                    of uninvoicedLessons
+                ) {
+
+                    totalMinutes +=
+                        Number(
+                            lesson.duration_minutes
+                        );
+
+                }
+
+
+                // =====================================
+                // Calculate Billing Hours
+                // =====================================
+
+                const billingHours =
+                    totalMinutes /
+                    60;
+
+
+                // =====================================
+                // Snapshot Price
+                // =====================================
+
+                const pricePerLesson =
+                    Number(
+                        studentSubject.price_per_lesson
+                    );
+
+
+                if (
+                    Number.isNaN(
+                        pricePerLesson
+                    ) ||
+                    pricePerLesson < 0
+                ) {
+
+                    const error =
+                        new app_error();
+
+                    error.create(
+                        `invalid price_per_lesson for student subject ${studentSubject._id}`,
+                        400,
+                        http_status_text.FAIL
+                    );
+
+                    return next(error);
+                }
+
+
+                // =====================================
+                // Calculate Item Total
+                // =====================================
+
+                const itemTotal =
+                    Number(
+                        (
+                            billingHours *
+                            pricePerLesson
+                        ).toFixed(2)
+                    );
+
+
+                // =====================================
+                // Add Invoice Item
+                // =====================================
+
+                invoiceItems.push({
+
+                    student_assignment:
+                        studentAssignment._id,
+
+                    student_subject:
+                        studentSubject._id,
+
+                    lessons:
+                        uninvoicedLessons.map(
+                            lesson =>
+                                lesson._id
+                        ),
+
+                    lessons_count:
+                        uninvoicedLessons.length,
+
+                    total_minutes:
+                        totalMinutes,
+
+                    billing_hours:
+                        Number(
+                            billingHours.toFixed(4)
+                        ),
+
+                    price_per_lesson:
+                        pricePerLesson,
+
+                    total:
+                        itemTotal
+
+                });
+
+
+                subtotalAmount +=
+                    itemTotal;
+
             }
-
-
-            // =========================================
-            // Billing Hours
-            // =========================================
-
-            const billingHours =
-                totalMinutes /
-                60;
-
-
-            // =========================================
-            // Snapshot Hourly Price
-            // =========================================
-
-            const pricePerHour =
-                Number(
-                    studentSubject.price_per_lesson
-                );
-
-
-            if (
-                Number.isNaN(
-                    pricePerHour
-                ) ||
-                pricePerHour < 0
-            ) {
-
-                return next(
-                    createError(
-                        'invalid student hourly price',
-                        400
-                    )
-                );
-
-            }
-
-
-            // =========================================
-            // Item Total
-            // =========================================
-
-            const itemTotal =
-                billingHours *
-                pricePerHour;
-
-
-            // =========================================
-            // Add Item
-            // =========================================
-
-            invoiceItems.push({
-
-                student_assignment:
-                    student_assignment,
-
-                student_subject:
-                    student_subject,
-
-                lessons:
-                    uninvoicedLessons.map(
-                        lesson =>
-                            lesson._id
-                    ),
-
-                lessons_count:
-                    uninvoicedLessons.length,
-
-                total_minutes:
-                    totalMinutes,
-
-                billing_hours:
-                    Math.round(
-                        billingHours *
-                        10000
-                    ) / 10000,
-
-                price_per_lesson:
-                    pricePerHour,
-
-                total:
-                    Math.round(
-                        itemTotal *
-                        100
-                    ) / 100
-
-            });
-
-
-            totalAmount +=
-                itemTotal;
 
         }
 
 
         // =============================================
-        // No Lessons
+        // No Unbilled Lessons
         // =============================================
 
         if (
             !invoiceItems.length
         ) {
 
-            return next(
-                createError(
-                    'no unbilled completed lessons found for this billing month',
-                    400
-                )
+            const error =
+                new app_error();
+
+            error.create(
+                'no unbilled completed lessons found for this family in this billing month',
+                400,
+                http_status_text.FAIL
             );
 
+            return next(error);
         }
 
 
         // =============================================
-        // Round Total
+        // Round Subtotal
         // =============================================
 
-        totalAmount =
+        subtotalAmount =
             Number(
-                totalAmount.toFixed(2)
+                subtotalAmount.toFixed(2)
             );
+
+
+        // =============================================
+        // Get Active Family Discounts
+        //
+        // IMPORTANT:
+        // Discounts are NOT accepted from the body.
+        // They come directly from the database.
+        // =============================================
+
+        const familyDiscounts =
+            await FamilyDiscount.find({
+
+                academy_id,
+
+                family,
+
+                billing_month,
+
+                status:
+                    'active'
+
+            }).sort({
+
+                createdAt: 1
+
+            });
 
 
         // =============================================
         // Calculate Discounts
+        //
+        // Discounts are applied sequentially.
+        //
+        // Example:
+        //
+        // subtotal = 1000
+        //
+        // 10% => 900
+        // 5%  => 855
+        //
+        // Final = 855
         // =============================================
 
-        let discountResult;
+        let currentAmount =
+            subtotalAmount;
 
 
-        try {
+        const discountSnapshots = [];
 
-            discountResult =
-                calculateDiscounts(
-                    totalAmount,
-                    discounts
+
+        for (
+            const discount
+            of familyDiscounts
+        ) {
+
+            const percentage =
+                Number(
+                    discount.percentage
                 );
 
+
+            if (
+                Number.isNaN(
+                    percentage
+                ) ||
+                percentage <= 0 ||
+                percentage > 100
+            ) {
+
+                const error =
+                    new app_error();
+
+                error.create(
+                    `invalid discount percentage for discount ${discount._id}`,
+                    400,
+                    http_status_text.FAIL
+                );
+
+                return next(error);
+            }
+
+
+            const discountAmount =
+                Number(
+                    (
+                        currentAmount *
+                        percentage /
+                        100
+                    ).toFixed(2)
+                );
+
+
+            currentAmount =
+                Number(
+                    (
+                        currentAmount -
+                        discountAmount
+                    ).toFixed(2)
+                );
+
+
+            discountSnapshots.push({
+
+                discount:
+                    discount._id,
+
+                percentage,
+
+                note:
+                    discount.note,
+
+                amount:
+                    discountAmount
+
+            });
+
         }
-        catch (error) {
-
-            return next(error);
-
-        }
 
 
-        const totalDiscount =
-            discountResult.totalDiscount;
+        // =============================================
+        // Final Amount
+        // =============================================
+
+        const totalAmount =
+            Number(
+                currentAmount.toFixed(2)
+            );
 
 
-        const finalAmount =
-            discountResult.finalAmount;
+        // =============================================
+        // Total Discount Amount
+        // =============================================
+
+        const discountAmount =
+            Number(
+                (
+                    subtotalAmount -
+                    totalAmount
+                ).toFixed(2)
+            );
+
+
+        // =============================================
+        // Effective Discount Percentage
+        //
+        // Example:
+        //
+        // 1000 -> 900 -> 855
+        //
+        // Actual discount = 14.5%
+        // =============================================
+
+        const discountPercentage =
+            subtotalAmount === 0
+                ? 0
+                : Number(
+                    (
+                        (
+                            discountAmount /
+                            subtotalAmount
+                        ) *
+                        100
+                    ).toFixed(4)
+                );
+
+
+        // =============================================
+        // Status
+        // =============================================
+
+        const status =
+            totalAmount === 0
+                ? 'paid'
+                : 'unpaid';
 
 
         // =============================================
@@ -824,32 +768,28 @@ const createInvoice = AsyncWrapper(
                 items:
                     invoiceItems,
 
-                // قبل الخصم
+                subtotal_amount:
+                    subtotalAmount,
+
+                discounts:
+                    discountSnapshots,
+
+                discount_percentage:
+                    discountPercentage,
+
+                discount_amount:
+                    discountAmount,
+
                 total_amount:
                     totalAmount,
-
-                // إجمالي الخصومات
-                total_discount:
-                    totalDiscount,
-
-                // بعد الخصم
-                net_amount:
-                    finalAmount,
-
-                // الخصومات Snapshot
-                discounts:
-                    discountResult.discounts,
 
                 paid_amount:
                     0,
 
                 remaining_amount:
-                    finalAmount,
+                    totalAmount,
 
-                status:
-                    finalAmount === 0
-                        ? 'paid'
-                        : 'unpaid',
+                status,
 
                 billing_month,
 

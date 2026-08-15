@@ -70,8 +70,7 @@ DELETE /student-subject/:student_subject_id
 POST   /lesson
 GET    /lesson
 GET    /lesson/student/:student_assignment_id
-PATCH  /lesson/:lesson_id/status
-DELETE /lesson/:lesson_id
+PATCH  /lesson/:lesson_id/status (completed-scheduled-cancelled)
 
 POST   /teacher-payroll/generate
 GET    /teacher-payroll

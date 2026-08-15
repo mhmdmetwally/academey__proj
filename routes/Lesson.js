@@ -105,27 +105,6 @@ router.route(
 );
 
 
-/*
-=====================================================
-Cancel Lesson
-=====================================================
-*/
-
-router.route(
-    '/:lesson_id'
-)
-.delete(
-
-    verify_token,
-
-    allowed_tool(
-        user_role.academy_admin,
-        user_role.supervisor
-    ),
-
-    lesson_controller.cancelLesson
-
- );
 
 
 module.exports =

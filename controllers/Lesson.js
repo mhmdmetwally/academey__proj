@@ -796,76 +796,6 @@ const updateLessonStatus = AsyncWrapper(async (req, res, next) => {
 
 );
 
-// =====================================================// Cancel Lesson// =====================================================
-
-const cancelLesson = AsyncWrapper(async (req, res, next) => {
-
-    const {
-        lesson_id
-    } = req.params;
-
-
-    const lesson =
-        await getLessonForUser(
-            req,
-            lesson_id
-        );
-
-
-    if (!lesson) {
-
-        const error =
-            new app_error();
-
-        error.create(
-            'lesson not found or you cannot access it',
-            404,
-            http_status_text.FAIL
-        );
-
-        return next(error);
-    }
-
-
-    if (
-        lesson.status ===
-        'cancelled'
-    ) {
-
-        const error =
-            new app_error();
-
-        error.create(
-            'lesson is already cancelled',
-            400,
-            http_status_text.FAIL
-        );
-
-        return next(error);
-    }
-
-
-    lesson.status =
-        'cancelled';
-
-
-    await lesson.save();
-
-
-    return res.status(200).json({
-
-        status:
-            http_status_text.SUCCESS,
-
-        data: {
-            lesson
-        }
-
-    });
-
-}
-
-);
 
 module.exports = {
 
@@ -877,6 +807,5 @@ getStudentLessons,
 
 updateLessonStatus,
 
-cancelLesson
 
 };
