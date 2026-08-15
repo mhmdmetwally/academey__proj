@@ -80,6 +80,7 @@ PATCH  /teacher-payroll/:payroll_id/cancel
 
 POST   /invoice
 GET    /invoice
+GET    /invoice/monthly-summary?family=value&billing_month=value
 GET    /invoice/:invoice_id
 DELETE /invoice/:invoice_id
 
