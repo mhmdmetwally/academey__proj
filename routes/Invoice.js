@@ -91,5 +91,12 @@ router.route('/:invoice_id')
     );
 
 
+router.route('/monthly-summary')
+    .get(
+        verify_token,
+        allowed_tool,
+        invoice_controller.getMonthlyFamilySummary
+    );
+
 module.exports =
     router;

@@ -115,5 +115,11 @@ router.route('/:payment_id')
         payment_controller.cancelPayment
     );
 
+router.route('/monthly')
+    .get(
+        verify_token,
+        allowed_tool,
+        payment_controller.getMonthlyFamilyPayments
+    );
 
 module.exports = router;

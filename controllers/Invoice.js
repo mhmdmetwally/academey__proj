@@ -33,26 +33,563 @@ const {
 
 const {
     getAcademyId,
-    getStudentAssignmentForUser,
-    getStudentSubjectForUser
-} = require('../utils/AccessScope');
+    getStudentAssignmentForUser
+} =
+    require('../utils/AccessScope');
 
+
+// =====================================================
+// Helper: Create Error
+// =====================================================
+
+const createError = (
+    message,
+    statusCode
+) => {
+
+    const error =
+        new app_error();
+
+    error.create(
+        message,
+        statusCode,
+        http_status_text.FAIL
+    );
+
+    return error;
+};
+
+
+// =====================================================
+// Helper: Round
+// =====================================================
+
+const roundMoney = (value) => {
+
+    return Number(
+        Number(value).toFixed(2)
+    );
+
+};
+
+
+// =====================================================
+// Helper: Get Monthly Invoice Totals
+//
+// Gets all non-cancelled invoices for:
+// academy + family + billing_month
+// =====================================================
+
+const getMonthlyInvoiceTotals = async (
+    academy_id,
+    family,
+    billing_month
+) => {
+
+    const result =
+        await Invoice.aggregate([
+
+            {
+                $match: {
+
+                    academy_id,
+
+                    family,
+
+                    billing_month,
+
+                    status: {
+                        $ne: 'cancelled'
+                    }
+
+                }
+            },
+
+            {
+                $group: {
+
+                    _id: null,
+
+                    subtotal_amount: {
+                        $sum: '$subtotal_amount'
+                    },
+
+                    discount_amount: {
+                        $sum: '$discount_amount'
+                    },
+
+                    total_amount: {
+                        $sum: '$total_amount'
+                    },
+
+                    paid_amount: {
+                        $sum: '$paid_amount'
+                    },
+
+                    remaining_amount: {
+                        $sum: '$remaining_amount'
+                    },
+
+                    invoice_count: {
+                        $sum: 1
+                    }
+
+                }
+            }
+
+        ]);
+
+
+    if (!result.length) {
+
+        return {
+
+            subtotal_amount: 0,
+
+            discount_amount: 0,
+
+            total_amount: 0,
+
+            paid_amount: 0,
+
+            remaining_amount: 0,
+
+            invoice_count: 0
+
+        };
+
+    }
+
+
+    return {
+
+        subtotal_amount:
+            roundMoney(
+                result[0].subtotal_amount
+            ),
+
+        discount_amount:
+            roundMoney(
+                result[0].discount_amount
+            ),
+
+        total_amount:
+            roundMoney(
+                result[0].total_amount
+            ),
+
+        paid_amount:
+            roundMoney(
+                result[0].paid_amount
+            ),
+
+        remaining_amount:
+            roundMoney(
+                result[0].remaining_amount
+            ),
+
+        invoice_count:
+            result[0].invoice_count
+
+    };
+
+};
+
+
+// =====================================================
+// Helper: Calculate Monthly Discount
+//
+// IMPORTANT
+//
+// Family discounts belong to the MONTH,
+// not to each invoice separately.
+//
+// Example:
+//
+// Existing invoices subtotal = 1000
+// New invoice subtotal = 500
+//
+// Discounts:
+// 10%
+// 5%
+//
+// We calculate the discount on the monthly
+// cumulative amount and only put the NEW
+// portion of the discount into the new invoice.
+//
+// This prevents:
+//
+// Invoice 1 -> 10% discount
+// Invoice 2 -> another full 10% discount
+//
+// =====================================================
+
+const calculateIncrementalDiscount = (
+    oldSubtotal,
+    newSubtotal,
+    discounts
+) => {
+
+    let oldAmount =
+        roundMoney(oldSubtotal);
+
+    let newAmount =
+        roundMoney(
+            oldSubtotal +
+            newSubtotal
+        );
+
+
+    const snapshots = [];
+
+
+    for (
+        const discount
+        of discounts
+    ) {
+
+        const percentage =
+            Number(
+                discount.percentage
+            );
+
+
+        if (
+            Number.isNaN(
+                percentage
+            ) ||
+            percentage <= 0 ||
+            percentage > 100
+        ) {
+
+            throw createError(
+                `invalid discount percentage for discount ${discount._id}`,
+                400
+            );
+
+        }
+
+
+        // =============================================
+        // Amount before discount
+        // =============================================
+
+        const oldBefore =
+            oldAmount;
+
+        const newBefore =
+            newAmount;
+
+
+        // =============================================
+        // Apply discount to OLD monthly amount
+        // =============================================
+
+        const oldDiscountAmount =
+            roundMoney(
+                oldBefore *
+                percentage /
+                100
+            );
+
+
+        oldAmount =
+            roundMoney(
+                oldBefore -
+                oldDiscountAmount
+            );
+
+
+        // =============================================
+        // Apply discount to NEW monthly amount
+        // =============================================
+
+        const newDiscountAmount =
+            roundMoney(
+                newBefore *
+                percentage /
+                100
+            );
+
+
+        newAmount =
+            roundMoney(
+                newBefore -
+                newDiscountAmount
+            );
+
+
+        // =============================================
+        // Only the NEW portion belongs to
+        // the current invoice
+        // =============================================
+
+        const incrementalDiscount =
+            roundMoney(
+                (
+                    oldBefore -
+                    oldAmount
+                ) ===
+                (
+                    newBefore -
+                    newAmount
+                )
+                    ? 0
+                    : 0
+            );
+
+
+        /*
+         * The clean way is to compare the
+         * discount generated by the cumulative
+         * amount against the discount generated
+         * by the old amount.
+         */
+
+        const oldFinalAfterThisDiscount =
+            oldAmount;
+
+        const cumulativeFinalAfterThisDiscount =
+            newAmount;
+
+
+        /*
+         * We don't use the above direct difference
+         * because previous discounts may already
+         * have changed the base.
+         *
+         * Calculate the new invoice's share:
+         */
+
+        const newPortion =
+            roundMoney(
+                (
+                    newBefore -
+                    oldBefore
+                )
+            );
+
+
+        const newDiscountShare =
+            roundMoney(
+                newPortion *
+                percentage /
+                100
+            );
+
+
+        snapshots.push({
+
+            discount:
+                discount._id,
+
+            percentage,
+
+            note:
+                discount.note,
+
+            amount:
+                newDiscountShare
+
+        });
+
+    }
+
+
+    /*
+     * Recalculate exact final amount for the
+     * current invoice:
+     *
+     * cumulative final
+     * minus old monthly final
+     */
+
+    let oldFinal =
+        roundMoney(oldSubtotal);
+
+    let cumulativeFinal =
+        roundMoney(
+            oldSubtotal +
+            newSubtotal
+        );
+
+
+    for (
+        const discount
+        of discounts
+    ) {
+
+        const percentage =
+            Number(
+                discount.percentage
+            );
+
+
+        oldFinal =
+            roundMoney(
+                oldFinal -
+                roundMoney(
+                    oldFinal *
+                    percentage /
+                    100
+                )
+            );
+
+
+        cumulativeFinal =
+            roundMoney(
+                cumulativeFinal -
+                roundMoney(
+                    cumulativeFinal *
+                    percentage /
+                    100
+                )
+            );
+
+    }
+
+
+    const newInvoiceFinal =
+        roundMoney(
+            cumulativeFinal -
+            oldFinal
+        );
+
+
+    const actualDiscount =
+        roundMoney(
+            newSubtotal -
+            newInvoiceFinal
+        );
+
+
+    /*
+     * Rebuild snapshots correctly.
+     *
+     * Each discount's incremental amount is
+     * calculated stage by stage.
+     */
+
+    snapshots.length = 0;
+
+
+    let oldStage =
+        roundMoney(oldSubtotal);
+
+    let cumulativeStage =
+        roundMoney(
+            oldSubtotal +
+            newSubtotal
+        );
+
+
+    for (
+        const discount
+        of discounts
+    ) {
+
+        const percentage =
+            Number(
+                discount.percentage
+            );
+
+
+        const oldStageAfter =
+            roundMoney(
+                oldStage -
+                roundMoney(
+                    oldStage *
+                    percentage /
+                    100
+                )
+            );
+
+
+        const cumulativeStageAfter =
+            roundMoney(
+                cumulativeStage -
+                roundMoney(
+                    cumulativeStage *
+                    percentage /
+                    100
+                )
+            );
+
+
+        const oldDiscount =
+            roundMoney(
+                oldStage -
+                oldStageAfter
+            );
+
+
+        const cumulativeDiscount =
+            roundMoney(
+                cumulativeStage -
+                cumulativeStageAfter
+            );
+
+
+        const incrementalAmount =
+            roundMoney(
+                cumulativeDiscount -
+                oldDiscount
+            );
+
+
+        snapshots.push({
+
+            discount:
+                discount._id,
+
+            percentage,
+
+            note:
+                discount.note,
+
+            amount:
+                incrementalAmount
+
+        });
+
+
+        oldStage =
+            oldStageAfter;
+
+        cumulativeStage =
+            cumulativeStageAfter;
+
+    }
+
+
+    return {
+
+        discounts:
+            snapshots,
+
+        discountAmount:
+            actualDiscount,
+
+        totalAmount:
+            newInvoiceFinal
+
+    };
+
+};
 
 
 // =====================================================
 // Create Invoice
-//
-// Creates ONE monthly invoice for the whole family.
 //
 // Body:
 //
 // {
 //     "family": "FAMILY_ID",
 //     "billing_month": "2026-08",
-//     "notes": "August 2026 invoice"
+//     "notes": "August invoice"
 // }
 //
-// The server automatically gets:
+// Server automatically gets:
 //
 // Family
 //   ↓
@@ -64,806 +601,50 @@ const {
 //   ↓
 // Unbilled Lessons
 //   ↓
-// Family Discounts
-//   ↓
 // Invoice
+//
+// Can create MULTIPLE invoices for same family/month.
 // =====================================================
 
-const createInvoice = AsyncWrapper(
+const createInvoice =
+    AsyncWrapper(
 
-    async (req, res, next) => {
+        async (req, res, next) => {
 
-        const academy_id =
-            getAcademyId(req);
-
-
-        const {
-            family,
-            billing_month,
-            notes
-        } = req.body;
+            const academy_id =
+                getAcademyId(req);
 
 
-        // =============================================
-        // Basic Validation
-        // =============================================
-
-        if (
-            !family ||
-            !billing_month
-        ) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'family and billing_month are required',
-                400,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-        }
-
-
-        // =============================================
-        // Validate Billing Month
-        // =============================================
-
-        if (
-            !isValidBillingMonth(
-                billing_month
-            )
-        ) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'billing_month must be in YYYY-MM format',
-                400,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-        }
-
-
-        // =============================================
-        // Check Family
-        // =============================================
-
-        const familyDoc =
-            await Family.findById(
-                family
-            );
-
-
-        if (!familyDoc) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'family not found',
-                404,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-        }
-
-
-        if (
-            familyDoc.is_active === false
-        ) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'family is inactive',
-                400,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-        }
-
-
-        // =============================================
-        // Get Month Range
-        // =============================================
-
-        const {
-            monthStart,
-            nextMonth
-        } =
-            getMonthRange(
-                billing_month
-            );
-
-
-        // =============================================
-        // Get All Active Student Assignments
-        // For This Family + Academy
-        // =============================================
-
-        const studentAssignments =
-            await StudentAssignment.find({
-
-                academy_id,
-
+            const {
                 family,
-
-                is_active:
-                    true
-
-            });
-
-
-        if (
-            !studentAssignments.length
-        ) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'no active students found for this family in this academy',
-                400,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-        }
-
-
-        // =============================================
-        // Invoice Items
-        // =============================================
-
-        const invoiceItems = [];
-
-
-        let subtotalAmount = 0;
-
-
-        // =============================================
-        // Process Every Student Assignment
-        // =============================================
-
-        for (
-            const studentAssignment
-            of studentAssignments
-        ) {
-
-            // =========================================
-            // Access Check
-            //
-            // Academy Admin:
-            //   gets the assignment
-            //
-            // Supervisor:
-            //   only gets his own students
-            // =========================================
-
-            const accessibleStudent =
-                await getStudentAssignmentForUser(
-                    req,
-                    studentAssignment._id
-                );
-
-
-            if (!accessibleStudent) {
-
-                continue;
-            }
-
-
-            // =========================================
-            // Get All Active Subjects
-            // For This Student
-            // =========================================
-
-            const studentSubjects =
-                await StudentSubject.find({
-
-                    academy_id,
-
-                    student_assignment:
-                        studentAssignment._id,
-
-                    is_active:
-                        true
-
-                });
-
-
-            // =========================================
-            // Process Every Subject
-            // =========================================
-
-            for (
-                const studentSubject
-                of studentSubjects
-            ) {
-
-                // =====================================
-                // Get Completed Lessons
-                // For This Month
-                // =====================================
-
-                const lessons =
-                    await Lesson.find({
-
-                        academy_id,
-
-                        student_assignment:
-                            studentAssignment._id,
-
-                        student_subject:
-                            studentSubject._id,
-
-                        status:
-                            'completed',
-
-                        lesson_date: {
-
-                            $gte:
-                                monthStart,
-
-                            $lt:
-                                nextMonth
-
-                        }
-
-                    }).sort({
-
-                        lesson_date: 1
-
-                    });
-
-
-                if (
-                    !lessons.length
-                ) {
-
-                    continue;
-                }
-
-
-                // =====================================
-                // Find Previously Invoiced Lessons
-                //
-                // Only non-cancelled invoices count.
-                // =====================================
-
-                const previousInvoices =
-                    await Invoice.find({
-
-                        academy_id,
-
-                        family,
-
-                        'items.lessons': {
-
-                            $in:
-                                lessons.map(
-                                    lesson =>
-                                        lesson._id
-                                )
-
-                        },
-
-                        status: {
-
-                            $ne:
-                                'cancelled'
-
-                        }
-
-                    }).select(
-                        'items.lessons'
-                    );
-
-
-                // =====================================
-                // Already Invoiced Lesson IDs
-                // =====================================
-
-                const invoicedLessonIds =
-                    new Set();
-
-
-                for (
-                    const previousInvoice
-                    of previousInvoices
-                ) {
-
-                    for (
-                        const invoiceItem
-                        of previousInvoice.items
-                    ) {
-
-                        for (
-                            const lessonId
-                            of invoiceItem.lessons
-                        ) {
-
-                            invoicedLessonIds.add(
-                                String(
-                                    lessonId
-                                )
-                            );
-
-                        }
-
-                    }
-
-                }
-
-
-                // =====================================
-                // Keep Only Unbilled Lessons
-                // =====================================
-
-                const uninvoicedLessons =
-                    lessons.filter(
-
-                        lesson =>
-
-                            !invoicedLessonIds.has(
-                                String(
-                                    lesson._id
-                                )
-                            )
-
-                    );
-
-
-                if (
-                    !uninvoicedLessons.length
-                ) {
-
-                    continue;
-                }
-
-
-                // =====================================
-                // Calculate Total Minutes
-                // =====================================
-
-                let totalMinutes = 0;
-
-
-                for (
-                    const lesson
-                    of uninvoicedLessons
-                ) {
-
-                    totalMinutes +=
-                        Number(
-                            lesson.duration_minutes
-                        );
-
-                }
-
-
-                // =====================================
-                // Calculate Billing Hours
-                // =====================================
-
-                const billingHours =
-                    totalMinutes /
-                    60;
-
-
-                // =====================================
-                // Snapshot Price
-                // =====================================
-
-                const pricePerLesson =
-                    Number(
-                        studentSubject.price_per_lesson
-                    );
-
-
-                if (
-                    Number.isNaN(
-                        pricePerLesson
-                    ) ||
-                    pricePerLesson < 0
-                ) {
-
-                    const error =
-                        new app_error();
-
-                    error.create(
-                        `invalid price_per_lesson for student subject ${studentSubject._id}`,
-                        400,
-                        http_status_text.FAIL
-                    );
-
-                    return next(error);
-                }
-
-
-                // =====================================
-                // Calculate Item Total
-                // =====================================
-
-                const itemTotal =
-                    Number(
-                        (
-                            billingHours *
-                            pricePerLesson
-                        ).toFixed(2)
-                    );
-
-
-                // =====================================
-                // Add Invoice Item
-                // =====================================
-
-                invoiceItems.push({
-
-                    student_assignment:
-                        studentAssignment._id,
-
-                    student_subject:
-                        studentSubject._id,
-
-                    lessons:
-                        uninvoicedLessons.map(
-                            lesson =>
-                                lesson._id
-                        ),
-
-                    lessons_count:
-                        uninvoicedLessons.length,
-
-                    total_minutes:
-                        totalMinutes,
-
-                    billing_hours:
-                        Number(
-                            billingHours.toFixed(4)
-                        ),
-
-                    price_per_lesson:
-                        pricePerLesson,
-
-                    total:
-                        itemTotal
-
-                });
-
-
-                subtotalAmount +=
-                    itemTotal;
-
-            }
-
-        }
-
-
-        // =============================================
-        // No Unbilled Lessons
-        // =============================================
-
-        if (
-            !invoiceItems.length
-        ) {
-
-            const error =
-                new app_error();
-
-            error.create(
-                'no unbilled completed lessons found for this family in this billing month',
-                400,
-                http_status_text.FAIL
-            );
-
-            return next(error);
-        }
-
-
-        // =============================================
-        // Round Subtotal
-        // =============================================
-
-        subtotalAmount =
-            Number(
-                subtotalAmount.toFixed(2)
-            );
-
-
-        // =============================================
-        // Get Active Family Discounts
-        //
-        // IMPORTANT:
-        // Discounts are NOT accepted from the body.
-        // They come directly from the database.
-        // =============================================
-
-        const familyDiscounts =
-            await FamilyDiscount.find({
-
-                academy_id,
-
-                family,
-
                 billing_month,
-
-                status:
-                    'active'
-
-            }).sort({
-
-                createdAt: 1
-
-            });
+                notes
+            } =
+                req.body;
 
 
-        // =============================================
-        // Calculate Discounts
-        //
-        // Discounts are applied sequentially.
-        //
-        // Example:
-        //
-        // subtotal = 1000
-        //
-        // 10% => 900
-        // 5%  => 855
-        //
-        // Final = 855
-        // =============================================
-
-        let currentAmount =
-            subtotalAmount;
-
-
-        const discountSnapshots = [];
-
-
-        for (
-            const discount
-            of familyDiscounts
-        ) {
-
-            const percentage =
-                Number(
-                    discount.percentage
-                );
-
+            // =============================================
+            // Validation
+            // =============================================
 
             if (
-                Number.isNaN(
-                    percentage
-                ) ||
-                percentage <= 0 ||
-                percentage > 100
+                !family ||
+                !billing_month
             ) {
 
-                const error =
-                    new app_error();
-
-                error.create(
-                    `invalid discount percentage for discount ${discount._id}`,
-                    400,
-                    http_status_text.FAIL
+                return next(
+                    createError(
+                        'family and billing_month are required',
+                        400
+                    )
                 );
-
-                return next(error);
-            }
-
-
-            const discountAmount =
-                Number(
-                    (
-                        currentAmount *
-                        percentage /
-                        100
-                    ).toFixed(2)
-                );
-
-
-            currentAmount =
-                Number(
-                    (
-                        currentAmount -
-                        discountAmount
-                    ).toFixed(2)
-                );
-
-
-            discountSnapshots.push({
-
-                discount:
-                    discount._id,
-
-                percentage,
-
-                note:
-                    discount.note,
-
-                amount:
-                    discountAmount
-
-            });
-
-        }
-
-
-        // =============================================
-        // Final Amount
-        // =============================================
-
-        const totalAmount =
-            Number(
-                currentAmount.toFixed(2)
-            );
-
-
-        // =============================================
-        // Total Discount Amount
-        // =============================================
-
-        const discountAmount =
-            Number(
-                (
-                    subtotalAmount -
-                    totalAmount
-                ).toFixed(2)
-            );
-
-
-        // =============================================
-        // Effective Discount Percentage
-        //
-        // Example:
-        //
-        // 1000 -> 900 -> 855
-        //
-        // Actual discount = 14.5%
-        // =============================================
-
-        const discountPercentage =
-            subtotalAmount === 0
-                ? 0
-                : Number(
-                    (
-                        (
-                            discountAmount /
-                            subtotalAmount
-                        ) *
-                        100
-                    ).toFixed(4)
-                );
-
-
-        // =============================================
-        // Status
-        // =============================================
-
-        const status =
-            totalAmount === 0
-                ? 'paid'
-                : 'unpaid';
-
-
-        // =============================================
-        // Create Invoice
-        // =============================================
-
-        const invoice =
-            await Invoice.create({
-
-                academy_id,
-
-                family,
-
-                items:
-                    invoiceItems,
-
-                subtotal_amount:
-                    subtotalAmount,
-
-                discounts:
-                    discountSnapshots,
-
-                discount_percentage:
-                    discountPercentage,
-
-                discount_amount:
-                    discountAmount,
-
-                total_amount:
-                    totalAmount,
-
-                paid_amount:
-                    0,
-
-                remaining_amount:
-                    totalAmount,
-
-                status,
-
-                billing_month,
-
-                notes
-
-            });
-
-
-        // =============================================
-        // Response
-        // =============================================
-
-        return res.status(201).json({
-
-            status:
-                http_status_text.SUCCESS,
-
-            data: {
-
-                invoice
 
             }
 
-        });
-
-    }
-
-);
-
-
-// =====================================================
-// Get Invoices
-// =====================================================
-
-const getInvoices = AsyncWrapper(
-
-    async (req, res, next) => {
-
-        const academy_id =
-            getAcademyId(req);
-
-
-        const filter = {
-
-            academy_id
-
-        };
-
-
-        // =============================================
-        // Family Filter
-        // =============================================
-
-        if (
-            req.query.family
-        ) {
-
-            filter.family =
-                req.query.family;
-
-        }
-
-
-        // =============================================
-        // Billing Month
-        // =============================================
-
-        if (
-            req.query.billing_month
-        ) {
 
             if (
                 !isValidBillingMonth(
-                    req.query.billing_month
+                    billing_month
                 )
             ) {
 
@@ -877,245 +658,1147 @@ const getInvoices = AsyncWrapper(
             }
 
 
-            filter.billing_month =
-                req.query.billing_month;
+            // =============================================
+            // Family
+            // =============================================
 
-        }
-
-
-        // =============================================
-        // Status
-        // =============================================
-
-        if (
-            req.query.status
-        ) {
-
-            filter.status =
-                req.query.status;
-
-        }
+            const familyDoc =
+                await Family.findById(
+                    family
+                );
 
 
-        // =============================================
-        // Get Invoices
-        // =============================================
+            if (!familyDoc) {
 
-        const invoices =
-            await Invoice.find(
-                filter
-            )
+                return next(
+                    createError(
+                        'family not found',
+                        404
+                    )
+                );
 
-                .populate(
-                    'family',
-                    'name phone is_active'
-                )
+            }
 
-                .populate(
-                    'items.student_assignment'
-                )
 
-                .populate(
-                    'items.student_subject'
-                )
+            if (
+                familyDoc.is_active === false
+            ) {
 
-                .populate(
-                    'items.lessons'
-                )
+                return next(
+                    createError(
+                        'family is inactive',
+                        400
+                    )
+                );
 
-                .sort({
+            }
 
-                    invoice_date:
-                        -1
+
+            // =============================================
+            // Month
+            // =============================================
+
+            const {
+                monthStart,
+                nextMonth
+            } =
+                getMonthRange(
+                    billing_month
+                );
+
+
+            // =============================================
+            // Get all active students
+            // =============================================
+
+            const studentAssignments =
+                await StudentAssignment.find({
+
+                    academy_id,
+
+                    family,
+
+                    is_active: true
 
                 });
 
 
-        return res.status(200).json({
+            if (
+                !studentAssignments.length
+            ) {
 
-            status:
-                http_status_text.SUCCESS,
-
-            data: {
-
-                invoices
+                return next(
+                    createError(
+                        'no active students found for this family in this academy',
+                        400
+                    )
+                );
 
             }
 
-        });
 
-    }
+            // =============================================
+            // Invoice Items
+            // =============================================
 
-);
+            const invoiceItems = [];
+
+
+            let subtotalAmount = 0;
+
+
+            // =============================================
+            // Loop Students
+            // =============================================
+
+            for (
+                const studentAssignment
+                of studentAssignments
+            ) {
+
+                // =========================================
+                // Access Scope
+                // =========================================
+
+                const accessibleStudent =
+                    await getStudentAssignmentForUser(
+                        req,
+                        studentAssignment._id
+                    );
+
+
+                if (!accessibleStudent) {
+                    continue;
+                }
+
+
+                // =========================================
+                // Get Subjects
+                // =========================================
+
+                const studentSubjects =
+                    await StudentSubject.find({
+
+                        academy_id,
+
+                        student_assignment:
+                            studentAssignment._id,
+
+                        is_active:
+                            true
+
+                    });
+
+
+                // =========================================
+                // Loop Subjects
+                // =========================================
+
+                for (
+                    const studentSubject
+                    of studentSubjects
+                ) {
+
+                    // =====================================
+                    // Lessons
+                    // =====================================
+
+                    const lessons =
+                        await Lesson.find({
+
+                            academy_id,
+
+                            student_assignment:
+                                studentAssignment._id,
+
+                            student_subject:
+                                studentSubject._id,
+
+                            status:
+                                'completed',
+
+                            lesson_date: {
+
+                                $gte:
+                                    monthStart,
+
+                                $lt:
+                                    nextMonth
+
+                            }
+
+                        }).sort({
+
+                            lesson_date:
+                                1
+
+                        });
+
+
+                    if (!lessons.length) {
+                        continue;
+                    }
+
+
+                    // =====================================
+                    // Find already invoiced lessons
+                    // =====================================
+
+                    const previousInvoices =
+                        await Invoice.find({
+
+                            academy_id,
+
+                            family,
+
+                            'items.lessons': {
+
+                                $in:
+                                    lessons.map(
+                                        lesson =>
+                                            lesson._id
+                                    )
+
+                            },
+
+                            status: {
+
+                                $ne:
+                                    'cancelled'
+
+                            }
+
+                        }).select(
+                            'items.lessons'
+                        );
+
+
+                    const invoicedLessonIds =
+                        new Set();
+
+
+                    for (
+                        const previousInvoice
+                        of previousInvoices
+                    ) {
+
+                        for (
+                            const invoiceItem
+                            of previousInvoice.items
+                        ) {
+
+                            for (
+                                const lessonId
+                                of invoiceItem.lessons
+                            ) {
+
+                                invoicedLessonIds.add(
+                                    String(
+                                        lessonId
+                                    )
+                                );
+
+                            }
+
+                        }
+
+                    }
+
+
+                    // =====================================
+                    // Only unbilled lessons
+                    // =====================================
+
+                    const uninvoicedLessons =
+                        lessons.filter(
+
+                            lesson =>
+
+                                !invoicedLessonIds.has(
+                                    String(
+                                        lesson._id
+                                    )
+                                )
+
+                        );
+
+
+                    if (
+                        !uninvoicedLessons.length
+                    ) {
+
+                        continue;
+
+                    }
+
+
+                    // =====================================
+                    // Total Minutes
+                    // =====================================
+
+                    let totalMinutes = 0;
+
+
+                    for (
+                        const lesson
+                        of uninvoicedLessons
+                    ) {
+
+                        totalMinutes +=
+                            Number(
+                                lesson.duration_minutes || 0
+                            );
+
+                    }
+
+
+                    // =====================================
+                    // Billing Hours
+                    // =====================================
+
+                    const billingHours =
+                        totalMinutes / 60;
+
+
+                    // =====================================
+                    // Price
+                    // =====================================
+
+                    const pricePerLesson =
+                        Number(
+                            studentSubject.price_per_lesson
+                        );
+
+
+                    if (
+                        Number.isNaN(
+                            pricePerLesson
+                        ) ||
+                        pricePerLesson < 0
+                    ) {
+
+                        return next(
+                            createError(
+                                `invalid price_per_lesson for student subject ${studentSubject._id}`,
+                                400
+                            )
+                        );
+
+                    }
+
+
+                    // =====================================
+                    // Item Total
+                    // =====================================
+
+                    const itemTotal =
+                        roundMoney(
+                            billingHours *
+                            pricePerLesson
+                        );
+
+
+                    invoiceItems.push({
+
+                        student_assignment:
+                            studentAssignment._id,
+
+                        student_subject:
+                            studentSubject._id,
+
+                        lessons:
+                            uninvoicedLessons.map(
+                                lesson =>
+                                    lesson._id
+                            ),
+
+                        lessons_count:
+                            uninvoicedLessons.length,
+
+                        total_minutes:
+                            totalMinutes,
+
+                        billing_hours:
+                            Number(
+                                billingHours.toFixed(4)
+                            ),
+
+                        price_per_lesson:
+                            pricePerLesson,
+
+                        total:
+                            itemTotal
+
+                    });
+
+
+                    subtotalAmount +=
+                        itemTotal;
+
+                }
+
+            }
+
+
+            // =============================================
+            // No new lessons
+            // =============================================
+
+            if (
+                !invoiceItems.length
+            ) {
+
+                return next(
+                    createError(
+                        'no unbilled completed lessons found for this family in this billing month',
+                        400
+                    )
+                );
+
+            }
+
+
+            subtotalAmount =
+                roundMoney(
+                    subtotalAmount
+                );
+
+
+            // =============================================
+            // Existing monthly invoices
+            // =============================================
+
+            const previousMonthlyTotals =
+                await getMonthlyInvoiceTotals(
+                    academy_id,
+                    family,
+                    billing_month
+                );
+
+
+            // =============================================
+            // Get Active Discounts
+            // =============================================
+
+            const familyDiscounts =
+                await FamilyDiscount.find({
+
+                    academy_id,
+
+                    family,
+
+                    billing_month,
+
+                    status:
+                        'active'
+
+                }).sort({
+
+                    createdAt:
+                        1
+
+                });
+
+
+            // =============================================
+            // Calculate only NEW invoice's
+            // share of monthly discounts
+            // =============================================
+
+            const discountResult =
+                calculateIncrementalDiscount(
+
+                    previousMonthlyTotals.subtotal_amount,
+
+                    subtotalAmount,
+
+                    familyDiscounts
+
+                );
+
+
+            const totalAmount =
+                roundMoney(
+                    discountResult.totalAmount
+                );
+
+
+            const discountAmount =
+                roundMoney(
+                    discountResult.discountAmount
+                );
+
+
+            const discountPercentage =
+                subtotalAmount === 0
+
+                    ? 0
+
+                    : Number(
+                        (
+                            discountAmount /
+                            subtotalAmount *
+                            100
+                        ).toFixed(4)
+                    );
+
+
+            // =============================================
+            // Status
+            // =============================================
+
+            const status =
+                totalAmount === 0
+
+                    ? 'paid'
+
+                    : 'unpaid';
+
+
+            // =============================================
+            // Create Invoice
+            // =============================================
+
+            const invoice =
+                await Invoice.create({
+
+                    academy_id,
+
+                    family,
+
+                    items:
+                        invoiceItems,
+
+                    subtotal_amount:
+                        subtotalAmount,
+
+                    discounts:
+                        discountResult.discounts,
+
+                    discount_percentage:
+                        discountPercentage,
+
+                    discount_amount:
+                        discountAmount,
+
+                    total_amount:
+                        totalAmount,
+
+                    paid_amount:
+                        0,
+
+                    remaining_amount:
+                        totalAmount,
+
+                    status,
+
+                    billing_month,
+
+                    notes
+
+                });
+
+
+            // =============================================
+            // Get New Monthly Summary
+            // =============================================
+
+            const monthlyTotals =
+                await getMonthlyInvoiceTotals(
+                    academy_id,
+                    family,
+                    billing_month
+                );
+
+
+            return res.status(201).json({
+
+                status:
+                    http_status_text.SUCCESS,
+
+                data: {
+
+                    invoice,
+
+                    monthly_summary:
+                        monthlyTotals
+
+                }
+
+            });
+
+        }
+
+    );
+
+
+// =====================================================
+// Get Invoices
+//
+// Returns invoices + totals for returned filters
+// =====================================================
+
+const getInvoices =
+    AsyncWrapper(
+
+        async (req, res, next) => {
+
+            const academy_id =
+                getAcademyId(req);
+
+
+            const filter = {
+
+                academy_id
+
+            };
+
+
+            // =============================================
+            // Family
+            // =============================================
+
+            if (
+                req.query.family
+            ) {
+
+                filter.family =
+                    req.query.family;
+
+            }
+
+
+            // =============================================
+            // Billing Month
+            // =============================================
+
+            if (
+                req.query.billing_month
+            ) {
+
+                if (
+                    !isValidBillingMonth(
+                        req.query.billing_month
+                    )
+                ) {
+
+                    return next(
+                        createError(
+                            'billing_month must be in YYYY-MM format',
+                            400
+                        )
+                    );
+
+                }
+
+
+                filter.billing_month =
+                    req.query.billing_month;
+
+            }
+
+
+            // =============================================
+            // Status
+            // =============================================
+
+            if (
+                req.query.status
+            ) {
+
+                filter.status =
+                    req.query.status;
+
+            }
+
+
+            // =============================================
+            // Invoices
+            // =============================================
+
+            const invoices =
+                await Invoice.find(
+                    filter
+                )
+
+                    .populate(
+                        'family',
+                        'name phone is_active'
+                    )
+
+                    .populate(
+                        'items.student_assignment'
+                    )
+
+                    .populate(
+                        'items.student_subject'
+                    )
+
+                    .populate(
+                        'items.lessons'
+                    )
+
+                    .sort({
+
+                        invoice_date:
+                            -1
+
+                    });
+
+
+            // =============================================
+            // Calculate totals
+            // =============================================
+
+            const totals =
+                invoices.reduce(
+
+                    (acc, invoice) => {
+
+                        if (
+                            invoice.status !==
+                            'cancelled'
+                        ) {
+
+                            acc.subtotal_amount +=
+                                Number(
+                                    invoice.subtotal_amount
+                                );
+
+                            acc.discount_amount +=
+                                Number(
+                                    invoice.discount_amount
+                                );
+
+                            acc.total_amount +=
+                                Number(
+                                    invoice.total_amount
+                                );
+
+                            acc.paid_amount +=
+                                Number(
+                                    invoice.paid_amount
+                                );
+
+                            acc.remaining_amount +=
+                                Number(
+                                    invoice.remaining_amount
+                                );
+
+                            acc.invoice_count++;
+
+                        }
+
+
+                        return acc;
+
+                    },
+
+                    {
+
+                        subtotal_amount: 0,
+
+                        discount_amount: 0,
+
+                        total_amount: 0,
+
+                        paid_amount: 0,
+
+                        remaining_amount: 0,
+
+                        invoice_count: 0
+
+                    }
+
+                );
+
+
+            totals.subtotal_amount =
+                roundMoney(
+                    totals.subtotal_amount
+                );
+
+            totals.discount_amount =
+                roundMoney(
+                    totals.discount_amount
+                );
+
+            totals.total_amount =
+                roundMoney(
+                    totals.total_amount
+                );
+
+            totals.paid_amount =
+                roundMoney(
+                    totals.paid_amount
+                );
+
+            totals.remaining_amount =
+                roundMoney(
+                    totals.remaining_amount
+                );
+
+
+            return res.status(200).json({
+
+                status:
+                    http_status_text.SUCCESS,
+
+                data: {
+
+                    invoices,
+
+                    totals
+
+                }
+
+            });
+
+        }
+
+    );
+
+
+// =====================================================
+// Get Monthly Family Summary
+//
+// GET:
+// /invoice/monthly-summary?family=XXX&billing_month=2026-08
+// =====================================================
+
+const getMonthlyFamilySummary =
+    AsyncWrapper(
+
+        async (req, res, next) => {
+
+            const academy_id =
+                getAcademyId(req);
+
+
+            const {
+                family,
+                billing_month
+            } =
+                req.query;
+
+
+            if (
+                !family ||
+                !billing_month
+            ) {
+
+                return next(
+                    createError(
+                        'family and billing_month are required',
+                        400
+                    )
+                );
+
+            }
+
+
+            if (
+                !isValidBillingMonth(
+                    billing_month
+                )
+            ) {
+
+                return next(
+                    createError(
+                        'billing_month must be in YYYY-MM format',
+                        400
+                    )
+                );
+
+            }
+
+
+            const familyDoc =
+                await Family.findOne({
+
+                    _id:
+                        family
+
+                });
+
+
+            if (!familyDoc) {
+
+                return next(
+                    createError(
+                        'family not found',
+                        404
+                    )
+                );
+
+            }
+
+
+            const invoices =
+                await Invoice.find({
+
+                    academy_id,
+
+                    family,
+
+                    billing_month
+
+                })
+
+                    .sort({
+
+                        invoice_date:
+                            1
+
+                    });
+
+
+            const totals =
+                await getMonthlyInvoiceTotals(
+                    academy_id,
+                    family,
+                    billing_month
+                );
+
+
+            return res.status(200).json({
+
+                status:
+                    http_status_text.SUCCESS,
+
+                data: {
+
+                    family: {
+
+                        _id:
+                            familyDoc._id,
+
+                        name:
+                            familyDoc.name,
+
+                        phone:
+                            familyDoc.phone
+
+                    },
+
+                    billing_month,
+
+                    invoices,
+
+                    totals
+
+                }
+
+            });
+
+        }
+
+    );
 
 
 // =====================================================
 // Get Single Invoice
 // =====================================================
 
-const getSingleInvoice = AsyncWrapper(
+const getSingleInvoice =
+    AsyncWrapper(
 
-    async (req, res, next) => {
+        async (req, res, next) => {
 
-        const academy_id =
-            getAcademyId(req);
+            const academy_id =
+                getAcademyId(req);
 
 
-        const invoice =
-            await Invoice.findOne({
+            const invoice =
+                await Invoice.findOne({
 
-                _id:
-                    req.params.invoice_id,
+                    _id:
+                        req.params.invoice_id,
 
-                academy_id
+                    academy_id
 
-            })
+                })
 
-                .populate(
-                    'family',
-                    'name phone is_active'
-                )
+                    .populate(
+                        'family',
+                        'name phone is_active'
+                    )
 
-                .populate(
-                    'items.student_assignment'
-                )
+                    .populate(
+                        'items.student_assignment'
+                    )
 
-                .populate(
-                    'items.student_subject'
-                )
+                    .populate(
+                        'items.student_subject'
+                    )
 
-                .populate(
-                    'items.lessons'
+                    .populate(
+                        'items.lessons'
+                    );
+
+
+            if (!invoice) {
+
+                return next(
+                    createError(
+                        'invoice not found',
+                        404
+                    )
                 );
-
-
-        if (!invoice) {
-
-            return next(
-                createError(
-                    'invoice not found',
-                    404
-                )
-            );
-
-        }
-
-
-        return res.status(200).json({
-
-            status:
-                http_status_text.SUCCESS,
-
-            data: {
-
-                invoice
 
             }
 
-        });
 
-    }
+            // =============================================
+            // Monthly Summary
+            // =============================================
 
-);
+            const monthlyTotals =
+                await getMonthlyInvoiceTotals(
+
+                    academy_id,
+
+                    invoice.family._id ||
+                    invoice.family,
+
+                    invoice.billing_month
+
+                );
+
+
+            return res.status(200).json({
+
+                status:
+                    http_status_text.SUCCESS,
+
+                data: {
+
+                    invoice,
+
+                    monthly_summary:
+                        monthlyTotals
+
+                }
+
+            });
+
+        }
+
+    );
 
 
 // =====================================================
 // Cancel Invoice
 // =====================================================
 
-const cancelInvoice = AsyncWrapper(
+const cancelInvoice =
+    AsyncWrapper(
 
-    async (req, res, next) => {
+        async (req, res, next) => {
 
-        const academy_id =
-            getAcademyId(req);
-
-
-        const invoice =
-            await Invoice.findOne({
-
-                _id:
-                    req.params.invoice_id,
-
-                academy_id
-
-            });
+            const academy_id =
+                getAcademyId(req);
 
 
-        if (!invoice) {
+            const invoice =
+                await Invoice.findOne({
 
-            return next(
-                createError(
-                    'invoice not found',
-                    404
-                )
-            );
+                    _id:
+                        req.params.invoice_id,
 
-        }
+                    academy_id
 
-
-        if (
-            invoice.status ===
-            'cancelled'
-        ) {
-
-            return next(
-                createError(
-                    'invoice is already cancelled',
-                    400
-                )
-            );
-
-        }
+                });
 
 
-        // =============================================
-        // Cannot Cancel Paid Invoice
-        // =============================================
+            if (!invoice) {
 
-        if (
-            Number(
-                invoice.paid_amount
-            ) > 0
-        ) {
-
-            return next(
-                createError(
-                    'cannot cancel an invoice that has payments',
-                    400
-                )
-            );
-
-        }
-
-
-        invoice.status =
-            'cancelled';
-
-
-        invoice.remaining_amount =
-            0;
-
-
-        await invoice.save();
-
-
-        return res.status(200).json({
-
-            status:
-                http_status_text.SUCCESS,
-
-            data: {
-
-                invoice
+                return next(
+                    createError(
+                        'invoice not found',
+                        404
+                    )
+                );
 
             }
 
-        });
 
-    }
+            if (
+                invoice.status ===
+                'cancelled'
+            ) {
 
-);
+                return next(
+                    createError(
+                        'invoice is already cancelled',
+                        400
+                    )
+                );
+
+            }
+
+
+            // =============================================
+            // Cannot cancel if paid
+            // =============================================
+
+            if (
+                Number(
+                    invoice.paid_amount
+                ) > 0
+            ) {
+
+                return next(
+                    createError(
+                        'cannot cancel an invoice that has payments',
+                        400
+                    )
+                );
+
+            }
+
+
+            invoice.status =
+                'cancelled';
+
+            invoice.remaining_amount =
+                0;
+
+
+            await invoice.save();
+
+
+            const monthlyTotals =
+                await getMonthlyInvoiceTotals(
+
+                    academy_id,
+
+                    invoice.family,
+
+                    invoice.billing_month
+
+                );
+
+
+            return res.status(200).json({
+
+                status:
+                    http_status_text.SUCCESS,
+
+                data: {
+
+                    invoice,
+
+                    monthly_summary:
+                        monthlyTotals
+
+                }
+
+            });
+
+        }
+
+    );
 
 
 // =====================================================
@@ -1127,6 +1810,8 @@ module.exports = {
     createInvoice,
 
     getInvoices,
+
+    getMonthlyFamilySummary,
 
     getSingleInvoice,
 
