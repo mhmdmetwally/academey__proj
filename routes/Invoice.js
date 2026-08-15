@@ -1,4 +1,5 @@
-const express = require('express');
+const express =
+    require('express');
 
 const router =
     express.Router();
@@ -55,6 +56,27 @@ router.route('/')
 
 
 // =====================================================
+// Get Monthly Family Summary
+// IMPORTANT:
+// Must be BEFORE /:invoice_id
+// =====================================================
+
+router.route('/monthly-summary')
+    .get(
+
+        verify_token,
+
+        allowed_tool(
+            user_role.academy_admin,
+            user_role.supervisor
+        ),
+
+        invoice_controller.getMonthlyFamilySummary
+
+    );
+
+
+// =====================================================
 // Get Single Invoice
 // =====================================================
 
@@ -90,13 +112,6 @@ router.route('/:invoice_id')
 
     );
 
-
-router.route('/monthly-summary')
-    .get(
-        verify_token,
-        allowed_tool,
-        invoice_controller.getMonthlyFamilySummary
-    );
 
 module.exports =
     router;
