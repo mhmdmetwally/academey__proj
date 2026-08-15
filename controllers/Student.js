@@ -416,8 +416,7 @@ const getAcademyStudents = AsyncWrapper(
         const students =
             await StudentAssignment
                 .find({
-                    academy_id,
-                    is_active: true
+                    academy_id
                 })
 
                 .populate(
@@ -573,9 +572,6 @@ const getMyStudents = AsyncWrapper(
                     supervisor:
                         supervisor._id,
 
-                    is_active:
-                        true
-
                 })
 
                 .populate(
@@ -649,9 +645,6 @@ const getSupervisorStudent = AsyncWrapper(
 
                     supervisor:
                         supervisor._id,
-
-                    is_active:
-                        true
 
                 })
 
