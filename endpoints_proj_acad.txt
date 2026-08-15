@@ -29,9 +29,11 @@ POST   /family
 
 POST   /teacher
 GET    /teacher/my-teachers
-GET    /teacher/my-academies
-GET    /teacher/:teacher_id
+GET    /teacher/my-teachers/:teacher_id
+GET    /teacher/academy-teachers
+GET    /teacher/academy-teachers/:teacher_id
 PATCH  /teacher/:teacher_id
+
 PATCH /teacher-payroll/:payroll_id/discount
 PATCH /teacher-payroll/:payroll_id/bonus
 
