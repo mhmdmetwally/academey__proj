@@ -439,6 +439,7 @@ const getAcademyTeachers = AsyncWrapper(
                 .find({
 
                     academy_id,
+
                 })
 
                 .populate(
