@@ -1,6 +1,7 @@
 const AsyncWrapper = require('../middleware/AsyncWrapper');
 const SupervisorPayroll = require('../models/SupervisorPayroll');
 const Expense = require('../models/Expense');
+const Supervisor = require('../models/Supervisor');
 const User = require('../models/User');
 const app_error = require('../utils/AppError');
 const http_status_text = require('../utils/HttpStatusText');
@@ -25,7 +26,7 @@ const calculateSupervisorPayroll = AsyncWrapper(async (req, res, next) => {
         return next(error);
     }
 
-    const supervisor = await User.findOne({
+    const supervisor = await Supervisor.findOne({
         _id: supervisor_id,
         academy_id,
         role: 'supervisor'
