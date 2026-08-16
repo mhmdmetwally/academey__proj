@@ -947,187 +947,79 @@ const addBonus =
 
 
 // =====================================================
-// Get Payrolls
+// Get Payrolls 
 // =====================================================
+const getPayrolls = AsyncWrapper(async (req, res, next) => {
+    const academy_id = getAcademyId(req);
 
-const getPayrolls =
-    AsyncWrapper(
-        async (
-            req,
-            res,
-            next
-        ) => {
+    if (!academy_id) {
+        return next(createError('بيانات التوثيق غير مكتملة', 401));
+    }
 
-            const academy_id =
-                getAcademyId(req);
+    const filter = { academy_id };
 
-            const filter = {
-                academy_id
-            };
-
-
-            if (
-                req.query.billing_month
-            ) {
-
-                if (
-                    !isValidBillingMonth(
-                        req.query.billing_month
-                    )
-                ) {
-
-                    return next(
-                        createError(
-                            'billing_month must be in YYYY-MM format',
-                            400
-                        )
-                    );
-
-                }
-
-                filter.billing_month =
-                    req.query.billing_month;
-
-            }
-
-
-            if (
-                req.query.teacher_assignment_id
-            ) {
-
-                const teacherAssignment =
-                    await getTeacherAssignmentForUser(
-                        req,
-                        req.query.teacher_assignment_id
-                    );
-
-
-                if (!teacherAssignment) {
-
-                    return next(
-                        createError(
-                            'teacher assignment not found or you cannot access it',
-                            404
-                        )
-                    );
-
-                }
-
-
-                filter.teacher_assignment =
-                    req.query.teacher_assignment_id;
-
-            }
-
-
-            if (
-                req.query.status
-            ) {
-
-                const allowedStatuses = [
-                    'pending',
-                    'partially_paid',
-                    'paid',
-                    'cancelled'
-                ];
-
-
-                if (
-                    !allowedStatuses.includes(
-                        req.query.status
-                    )
-                ) {
-
-                    return next(
-                        createError(
-                            'invalid payroll status',
-                            400
-                        )
-                    );
-
-                }
-
-
-                filter.status =
-                    req.query.status;
-
-            }
-
-
-            const payrolls =
-                await TeacherPayroll.find(
-                    filter
-                )
-                    .populate(
-                        'teacher',
-                        'user is_active'
-                    )
-                    .populate({
-                        path:
-                            'teacher_assignment',
-
-                        populate: {
-                            path:
-                                'teacher'
-                        }
-                    })
-                    .sort({
-                        billing_month: -1,
-                        createdAt: -1
-                    });
-
-
-            const accessiblePayrolls = [];
-
-
-            for (
-                const payroll
-                of payrolls
-            ) {
-
-                const teacherAssignmentId =
-                    payroll.teacher_assignment &&
-                    payroll.teacher_assignment._id
-                        ?
-                        payroll.teacher_assignment._id
-                        :
-                        payroll.teacher_assignment;
-
-
-                const accessible =
-                    await getTeacherAssignmentForUser(
-                        req,
-                        teacherAssignmentId
-                    );
-
-
-                if (accessible) {
-
-                    accessiblePayrolls.push(
-                        payroll
-                    );
-
-                }
-
-            }
-
-
-            return res.status(200).json({
-
-                status:
-                    http_status_text.SUCCESS,
-
-                data: {
-                    payrolls:
-                        accessiblePayrolls
-                }
-
-            });
-
+    // 1. فلترة الشهر
+    if (req.query.billing_month) {
+        if (!isValidBillingMonth(req.query.billing_month)) {
+            return next(createError('billing_month must be in YYYY-MM format', 400));
         }
-    );
+        filter.billing_month = req.query.billing_month;
+    }
 
+    // 2. فلترة الحالة
+    if (req.query.status) {
+        const allowedStatuses = ['pending', 'partially_paid', 'paid', 'cancelled'];
+        if (!allowedStatuses.includes(req.query.status)) {
+            return next(createError('invalid payroll status', 400));
+        }
+        filter.status = req.query.status;
+    }
 
+    // 3. فلترة نطاق الوصول حسب دور المستخدم (Supervisor vs Admin)
+    if (req.user.role === user_role.supervisor) {
+        const supervisor = await getSupervisor(req);
+        if (!supervisor) {
+            return res.status(200).json({
+                status: http_status_text.SUCCESS,
+                data: { payrolls: [] }
+            });
+        }
+
+        // جلب جميع تكليفات المعلمين التابعة لهذا المشرف
+        const supervisorAssignments = await TeacherAssignment.find({
+            supervisor: supervisor._id,
+            academy_id
+        }).select('_id');
+
+        const assignmentIds = supervisorAssignments.map(a => a._id);
+        filter.teacher_assignment = { $in: assignmentIds };
+    } else if (req.query.teacher_assignment_id) {
+        const teacherAssignment = await getTeacherAssignmentForUser(
+            req,
+            req.query.teacher_assignment_id
+        );
+
+        if (!teacherAssignment) {
+            return next(createError('teacher assignment not found or you cannot access it', 404));
+        }
+
+        filter.teacher_assignment = req.query.teacher_assignment_id;
+    }
+
+    // 4. استعلام واحد مباشر لقاعدة البيانات
+    const payrolls = await TeacherPayroll.find(filter)
+        .populate('teacher', 'user is_active')
+        .populate({
+            path: 'teacher_assignment',
+            populate: { path: 'teacher' }
+        })
+        .sort({ billing_month: -1, createdAt: -1 });
+
+    return res.status(200).json({
+        status: http_status_text.SUCCESS,
+        data: { payrolls }
+    });
+});
 // =====================================================
 // Get Single Payroll
 // =====================================================
