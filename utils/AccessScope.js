@@ -19,25 +19,6 @@ const user_role =
     require('./UserRole');
 
 
-// =====================================================
-// Get Academy ID
-// =====================================================
-
-const getAcademyId = (req) => {
-
-    // Academy Admin
-    if (
-        req.user.role ===
-        user_role.academy_admin
-    ) {
-
-        return req.user.id;
-    }
-
-
-    // Supervisor / Teacher / Family
-    return req.user.academy_id;
-};
 
 
 // =====================================================
@@ -49,41 +30,41 @@ const isValidObjectId = (id) => {
     return mongoose.Types.ObjectId.isValid(id);
 };
 
+// =====================================================
+// Get Academy ID (نسخة آمنة)
+// =====================================================
+const getAcademyId = (req) => {
+    if (!req || !req.user) {
+        return null;
+    }
+
+    if (req.user.role === user_role.academy_admin) {
+        return req.user.id;
+    }
+
+    return req.user.academy_id;
+};
 
 // =====================================================
-// Get Supervisor Assignment
+// Get Supervisor Assignment (نسخة آمنة)
 // =====================================================
-
 const getSupervisor = async (req) => {
+    if (!req || !req.user) {
+        return null;
+    }
 
-    const academy_id =
-        getAcademyId(req);
-
-
+    const academy_id = getAcademyId(req);
     if (!academy_id) {
         return null;
     }
 
-
-    if (
-        req.user.role !==
-        user_role.supervisor
-    ) {
-
+    if (req.user.role !== user_role.supervisor) {
         return null;
     }
 
-
     return await Supervisor.findOne({
-
-        user:
-            req.user.id,
-
+        user: req.user.id,
         academy_id,
-
-        is_active:
-            true
-
     });
 };
 
@@ -132,8 +113,6 @@ const getStudentAssignmentForUser = async (
 
             academy_id,
 
-            is_active:
-                true
 
         });
     }
@@ -166,9 +145,6 @@ const getStudentAssignmentForUser = async (
 
             supervisor:
                 supervisor._id,
-
-            is_active:
-                true
 
         });
     }
@@ -222,9 +198,6 @@ const getTeacherAssignmentForUser = async (
 
             academy_id,
 
-            is_active:
-                true
-
         });
     }
 
@@ -256,9 +229,6 @@ const getTeacherAssignmentForUser = async (
 
             supervisor:
                 supervisor._id,
-
-            is_active:
-                true
 
         });
     }
@@ -308,8 +278,6 @@ const getStudentSubjectForUser = async (
 
             academy_id,
 
-            is_active:
-                true
 
         });
 
@@ -350,8 +318,6 @@ const getStudentSubjectForUser = async (
 
             academy_id,
 
-            is_active:
-                true
 
         });
 
