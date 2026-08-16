@@ -29,7 +29,6 @@ const calculateSupervisorPayroll = AsyncWrapper(async (req, res, next) => {
     const supervisor = await Supervisor.findOne({
         _id: supervisor_id,
         academy_id,
-        role: 'supervisor'
     });
 
     if (!supervisor) {
