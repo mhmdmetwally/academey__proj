@@ -1,15 +1,26 @@
-const app_error=require('../utils/AppError');
-const http_status_text=require('../utils/HttpStatusText')
+const app_error = require('../utils/AppError');
+const http_status_text = require('../utils/HttpStatusText');
 
-module.exports = (...allowedroles)=>{
-    return (req,res,next)=>{
-        const cur_role=req.user.role;
-        const is_active = req.user.is_active;
+module.exports = (...allowedroles) => {
+    return (req, res, next) => {
+        // التحقق من وجود req.user لتجنب انهيار الخادم
+        if (!req.user || !req.user.role) {
+            const err = new app_error();
+            err.create(
+                'Unauthorized / Missing authentication data',
+                401,
+                http_status_text.ERROR
+            );
+            return next(err);
+        }
 
-        if(allowedroles.includes(cur_role)){
+        const cur_role = req.user.role;
+
+        if (allowedroles.includes(cur_role)) {
             return next();
         }
-        const err=new app_error();
+
+        const err = new app_error();
         err.create(
             `${cur_role} not allowed to make this action`,
             403,
@@ -17,4 +28,4 @@ module.exports = (...allowedroles)=>{
         );
         return next(err);
     };
-}
+};
