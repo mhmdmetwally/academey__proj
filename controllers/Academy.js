@@ -471,24 +471,15 @@ const logout = AsyncWrapper(
 // =====================================================
 
 const getMyAcademy = AsyncWrapper(
-
     async (req, res, next) => {
+        const academy_id = req.user.id;
 
-        const academy_id =
-            req.user.id;
-
-
-        const academy =
-            await Academy.findById(
-                academy_id
-            ).select('-password -__v');
-
+        // تم إضافة -finance لمنع استرجاع بيانات المالية في الـ Response
+        const academy = await Academy.findById(academy_id)
+            .select('-password -__v -finance');
 
         if (!academy) {
-
-            const error =
-                new app_error();
-
+            const error = new app_error();
             error.create(
                 'academy not found',
                 404,
@@ -498,22 +489,13 @@ const getMyAcademy = AsyncWrapper(
             return next(error);
         }
 
-
         return res.status(200).json({
-
-            status:
-                http_status_text.SUCCESS,
-
+            status: http_status_text.SUCCESS,
             data: {
-
                 academy
-
             }
-
         });
-
     }
-
 );
 
 
