@@ -18,10 +18,15 @@ const app_error =
 const http_status_text =
     require('../utils/HttpStatusText');
 
+const user_role =
+    require('../utils/UserRole');
+    
 const {
     getAcademyId,
-    getTeacherAssignmentForUser
+    getTeacherAssignmentForUser,
+    getSupervisor
 } = require('../utils/AccessScope');
+
 
 
 // =====================================================
