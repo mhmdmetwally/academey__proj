@@ -40,6 +40,9 @@ const lesson_routes =
 const teacher_payroll_routes =
     require('./routes/TeacherPayroll');
 
+const supervisor_payroll_routes = 
+    require('./routes/SupervisorPayroll');
+
 const family_discount_router =
     require('./routes/FamilyDiscount');
 
@@ -244,6 +247,12 @@ app.use(
     '/teacher-payroll',
     teacher_payroll_routes
 );
+
+app.use(
+    '/supervisor-payroll',
+    supervisor_payroll_routes
+);
+
 
 app.use(
     '/family-discount',
