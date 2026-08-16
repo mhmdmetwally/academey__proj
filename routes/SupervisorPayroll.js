@@ -29,6 +29,6 @@ router.route('/:payroll_id/pay')
 
 router
     .route('/:payroll_id/salary')
-    .post(updateSupervisorPayrollSalary);
+    .post(supervisorPayrollController.updateSupervisorPayrollSalary);
 
 module.exports = router;

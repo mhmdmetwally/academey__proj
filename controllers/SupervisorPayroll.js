@@ -229,10 +229,146 @@ const getSupervisorPayrolls = AsyncWrapper(async (req, res, next) => {
     });
 });
 
+const updateSupervisorPayrollSalary = AsyncWrapper(
+    async (req, res, next) => {
+
+        const academy_id =
+            getAcademyId(req);
+
+        const { payroll_id } =
+            req.params;
+
+        const { base_salary } =
+            req.body;
+
+
+        if (
+            base_salary === undefined ||
+            base_salary === null
+        ) {
+            const error =
+                new app_error();
+
+            error.create(
+                'base_salary is required',
+                400,
+                http_status_text.FAIL
+            );
+
+            return next(error);
+        }
+
+
+        const salary =
+            Number(base_salary);
+
+
+        if (
+            !Number.isFinite(salary) ||
+            salary < 0
+        ) {
+            const error =
+                new app_error();
+
+            error.create(
+                'base_salary must be a valid number greater than or equal to 0',
+                400,
+                http_status_text.FAIL
+            );
+
+            return next(error);
+        }
+
+
+        const payroll =
+            await SupervisorPayroll.findOne({
+                _id: payroll_id,
+                academy_id
+            });
+
+
+        if (!payroll) {
+            const error =
+                new app_error();
+
+            error.create(
+                'Supervisor payroll record not found',
+                404,
+                http_status_text.FAIL
+            );
+
+            return next(error);
+        }
+
+
+        if (payroll.status === 'paid') {
+            const error =
+                new app_error();
+
+            error.create(
+                'Cannot modify a payroll that has already been paid',
+                400,
+                http_status_text.FAIL
+            );
+
+            return next(error);
+        }
+
+
+        if (payroll.status === 'cancelled') {
+            const error =
+                new app_error();
+
+            error.create(
+                'Cannot modify a cancelled payroll',
+                400,
+                http_status_text.FAIL
+            );
+
+            return next(error);
+        }
+
+
+        payroll.base_salary =
+            Math.round(salary * 100) / 100;
+
+
+        payroll.net_salary =
+            Math.max(
+                0,
+                Math.round(
+                    (
+                        payroll.base_salary +
+                        Number(payroll.total_bonuses || 0) -
+                        Number(payroll.total_deductions || 0)
+                    ) * 100
+                ) / 100
+            );
+
+
+        await payroll.save();
+
+
+        return res.status(200).json({
+
+            status:
+                http_status_text.SUCCESS,
+
+            data: {
+                payroll
+            }
+
+        });
+
+    }
+);
+
+
 module.exports = {
     calculateSupervisorPayroll,
     addBonusToSupervisorPayroll,
     addDeductionToSupervisorPayroll,
     markPayrollAsPaid,
-    getSupervisorPayrolls
+    getSupervisorPayrolls,
+    updateSupervisorPayrollSalary
 };
