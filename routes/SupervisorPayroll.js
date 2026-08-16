@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 
-const supervisorPayrollController = require('../controllers/supervisorPayroll');
-const verifyToken = require('../middleware/verifyToken');
-const allowedTo = require('../middleware/allowedTo');
-const user_role = require('../utils/userRoles'); // المسار حسب مكان ملف الـ roles عندك
+const supervisorPayrollController = require('../controllers/SupervisorPayroll');
+const verifyToken = require('../middleware/VerifyToken');
+const allowedTo = require('../middleware/AllowedTools');
+const user_role = require('../utils/UserRole'); 
 
 router.use(verifyToken);
 
@@ -19,15 +19,9 @@ router.route('/')
 router.route('/:payroll_id/bonus')
     .post(supervisorPayrollController.addBonusToSupervisorPayroll);
 
-router.route('/:payroll_id/bonus/:bonus_id')
-    .delete(supervisorPayrollController.removeBonusFromSupervisorPayroll);
-
 // إضافة وتعديل / حذف الخصومات
 router.route('/:payroll_id/deduction')
     .post(supervisorPayrollController.addDeductionToSupervisorPayroll);
-
-router.route('/:payroll_id/deduction/:deduction_id')
-    .delete(supervisorPayrollController.removeDeductionFromSupervisorPayroll);
 
 // الاعتماد والسداد
 router.route('/:payroll_id/pay')
