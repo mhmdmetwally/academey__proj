@@ -27,4 +27,8 @@ router.route('/:payroll_id/deduction')
 router.route('/:payroll_id/pay')
     .patch(supervisorPayrollController.markPayrollAsPaid);
 
+router
+    .route('/:payroll_id/salary')
+    .post(updateSupervisorPayrollSalary);
+
 module.exports = router;

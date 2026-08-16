@@ -222,6 +222,7 @@ const getSupervisorPayrolls = AsyncWrapper(async (req, res, next) => {
             }
             })
         .sort({ createdAt: -1 });
+        
     return res.status(200).json({
         status: http_status_text.SUCCESS,
         data: { payrolls }
