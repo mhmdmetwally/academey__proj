@@ -1,7 +1,7 @@
-const AsyncWrapper = require('../utils/AsyncWrapper');
+const AsyncWrapper = require('../middleware/AsyncWrapper');
 const app_error = require('../utils/AppError');
 const http_status_text = require('../utils/HttpStatusText');
-const { getAcademyId } = require('../utils/accessControl');
+const { getAcademyId } = require('../utils/AccessScope');
 
 const {
     getReportPeriod,
