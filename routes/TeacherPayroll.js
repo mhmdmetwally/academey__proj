@@ -1,137 +1,49 @@
-const express =
-    require('express');
+const express = require('express');
+const router = express.Router();
 
-const router =
-    express.Router();
-
-const teacher_payroll_controller =
-    require('../controllers/TeacherPayroll');
-
-const allowed_tool =
-    require('../middleware/AllowedTools');
-
-const user_role =
-    require('../utils/UserRole');
-
-const verify_token =
-    require('../middleware/VerifyToken');
-
+const {
+    generatePayroll,
+    addDiscount,
+    addBonus,
+    getPayrolls,
+    getSinglePayroll,
+    payPayroll,
+    cancelPayroll
+} = require('../controllers/TeacherPayroll');
 
 // =====================================================
-// Generate Payroll
+// Payroll Routes
 // =====================================================
 
-router.route('/generate')
-    .post(
+// Get all payrolls / Generate new payroll
+router
+    .route('/')
+    .get(getPayrolls)
+    .post(generatePayroll);
 
-        verify_token,
+// Get single payroll details
+router
+    .route('/:payroll_id')
+    .get(getSinglePayroll);
 
-        allowed_tool(
-            user_role.academy_admin,
-            user_role.supervisor
-        ),
+// Add discount to payroll
+router
+    .route('/:payroll_id/discount')
+    .post(addDiscount);
 
-        teacher_payroll_controller.generatePayroll
+// Add bonus to payroll
+router
+    .route('/:payroll_id/bonus')
+    .post(addBonus);
 
-    );
+// Pay payroll (full or partial)
+router
+    .route('/:payroll_id/pay')
+    .post(payPayroll);
 
+// Cancel payroll
+router
+    .route('/:payroll_id/cancel')
+    .post(cancelPayroll);
 
-// =====================================================
-// Get All Payrolls
-// =====================================================
-
-router.route('/')
-    .get(
-
-        verify_token,
-
-        allowed_tool(
-            user_role.academy_admin,
-            user_role.supervisor
-        ),
-
-        teacher_payroll_controller.getPayrolls
-
-    );
-
-
-// =====================================================
-// Add Discount
-//
-// Academy Admin ONLY
-//
-// =====================================================
-
-router.route('/:payroll_id/discount')
-    .patch(
-
-        verify_token,
-
-        allowed_tool(
-            user_role.academy_admin
-        ),
-
-        teacher_payroll_controller.addDiscount
-
-    );
-
-
-// =====================================================
-// Get Single Payroll
-// =====================================================
-
-router.route('/:payroll_id')
-    .get(
-
-        verify_token,
-
-        allowed_tool(
-            user_role.academy_admin,
-            user_role.supervisor
-        ),
-
-        teacher_payroll_controller.getSinglePayroll
-
-    );
-
-
-// =====================================================
-// Pay Payroll
-// =====================================================
-
-router.route('/:payroll_id/pay')
-    .patch(
-
-        verify_token,
-
-        allowed_tool(
-            user_role.academy_admin,
-            user_role.supervisor
-        ),
-
-        teacher_payroll_controller.payPayroll
-
-    );
-
-
-// =====================================================
-// Cancel Payroll
-// =====================================================
-
-router.route('/:payroll_id/cancel')
-    .patch(
-
-        verify_token,
-
-        allowed_tool(
-            user_role.academy_admin,
-            user_role.supervisor
-        ),
-
-        teacher_payroll_controller.cancelPayroll
-
-    );
-
-
-module.exports =
-    router;
+module.exports = router;
