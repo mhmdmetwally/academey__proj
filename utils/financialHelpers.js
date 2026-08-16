@@ -4,6 +4,15 @@ const Expense = require('../models/Expense');
 const TeacherPayroll = require('../models/TeacherPayroll');
 
 // =====================================================
+// Helper: Format Billing Month Safely (YYYY-MM)
+// =====================================================
+const formatBillingMonth = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}`;
+};
+
+// =====================================================
 // Calculate Growth Percentage
 // =====================================================
 const calculateGrowth = (currentAmount, previousAmount) => {
@@ -59,8 +68,9 @@ const getFinancialData = async (academyId, start, end) => {
     const startDate = new Date(start);
     const endDate = new Date(end);
 
-    const startBillingMonth = startDate.toISOString().slice(0, 7);
-    const endBillingMonth = endDate.toISOString().slice(0, 7);
+    // استخراج صيغة YYYY-MM بناءً على التوقيت المحلي لمنع خطأ UTC Shift
+    const startBillingMonth = formatBillingMonth(startDate);
+    const endBillingMonth = formatBillingMonth(endDate);
 
     // 1. Total Revenue Aggregation
     const revenueAgg = await Payment.aggregate([
