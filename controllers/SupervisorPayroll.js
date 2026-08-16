@@ -214,7 +214,7 @@ const getSupervisorPayrolls = AsyncWrapper(async (req, res, next) => {
     if (status) filter.status = status;
 
     const payrolls = await SupervisorPayroll.find(filter)
-        .populate('User', 'name phone')
+        .populate('Supervisor', 'name phone')
         .sort({ createdAt: -1 });
 
     return res.status(200).json({

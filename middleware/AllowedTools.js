@@ -3,14 +3,9 @@ const http_status_text = require('../utils/HttpStatusText');
 
 module.exports = (...allowedroles) => {
     return (req, res, next) => {
-        // التحقق من وجود req.user لتجنب انهيار الخادم
         if (!req.user || !req.user.role) {
             const err = new app_error();
-            err.create(
-                'Unauthorized / Missing authentication data',
-                401,
-                http_status_text.ERROR
-            );
+            err.create('Unauthorized / Missing user credentials', 401, http_status_text.ERROR);
             return next(err);
         }
 
@@ -21,11 +16,7 @@ module.exports = (...allowedroles) => {
         }
 
         const err = new app_error();
-        err.create(
-            `${cur_role} not allowed to make this action`,
-            403,
-            http_status_text.FAIL
-        );
+        err.create(`${cur_role} not allowed to make this action`, 403, http_status_text.FAIL);
         return next(err);
     };
 };
