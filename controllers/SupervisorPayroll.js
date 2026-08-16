@@ -1,5 +1,6 @@
 const AsyncWrapper = require('../middleware/AsyncWrapper');
 const SupervisorPayroll = require('../models/SupervisorPayroll');
+const Expense = require('../models/Expense');
 const User = require('../models/User');
 const app_error = require('../utils/AppError');
 const http_status_text = require('../utils/HttpStatusText');
@@ -99,11 +100,9 @@ const addBonusToSupervisorPayroll = AsyncWrapper(async (req, res, next) => {
         return next(error);
     }
 
-    // إضافة البونس وقيمته
     payroll.bonuses.push({ amount: Number(amount), reason });
     payroll.total_bonuses = payroll.bonuses.reduce((acc, b) => acc + Number(b.amount), 0);
 
-    // إعاده حساب صافي المرتب
     let netSalary = payroll.base_salary + payroll.total_bonuses - payroll.total_deductions;
     payroll.net_salary = Math.max(0, Math.round(netSalary * 100) / 100);
 
@@ -143,11 +142,9 @@ const addDeductionToSupervisorPayroll = AsyncWrapper(async (req, res, next) => {
         return next(error);
     }
 
-    // إضافة الخصم وقيمته
     payroll.deductions.push({ amount: Number(amount), reason });
     payroll.total_deductions = payroll.deductions.reduce((acc, d) => acc + Number(d.amount), 0);
 
-    // إعادة حساب صافي المرتب
     let netSalary = payroll.base_salary + payroll.total_bonuses - payroll.total_deductions;
     payroll.net_salary = Math.max(0, Math.round(netSalary * 100) / 100);
 
@@ -160,13 +157,14 @@ const addDeductionToSupervisorPayroll = AsyncWrapper(async (req, res, next) => {
 });
 
 // =====================================================
-// 4. تغيير حالة المرتب إلى مدفوع (Paid)
+// 4. تغيير حالة المرتب إلى مدفوع (Paid) وإنشاء سند صرف
 // =====================================================
 const markPayrollAsPaid = AsyncWrapper(async (req, res, next) => {
     const academy_id = getAcademyId(req);
     const { payroll_id } = req.params;
 
-    const payroll = await SupervisorPayroll.findOne({ _id: payroll_id, academy_id });
+    const payroll = await SupervisorPayroll.findOne({ _id: payroll_id, academy_id })
+        .populate('supervisor', 'name');
 
     if (!payroll) {
         const error = new app_error();
@@ -174,9 +172,28 @@ const markPayrollAsPaid = AsyncWrapper(async (req, res, next) => {
         return next(error);
     }
 
+    if (payroll.status === 'paid') {
+        const error = new app_error();
+        error.create('Payroll is already marked as paid', 400, http_status_text.FAIL);
+        return next(error);
+    }
+
+    // 1. تحديث حالة المرتب وتاريخ الدفع
     payroll.status = 'paid';
     payroll.payment_date = new Date();
     await payroll.save();
+
+    // 2. إنشاء سجل المصروف تلقائياً ليتكامل مع التقارير المالية
+    const supervisorName = payroll.supervisor?.name || 'Supervisor';
+    await Expense.create({
+        academy_id,
+        category: 'Salaries',
+        title: `Supervisor Salary - ${supervisorName} (${payroll.billing_month})`,
+        amount: payroll.net_salary,
+        expense_date: payroll.payment_date,
+        payment_method: 'cash',
+        notes: `Automated expense generated from supervisor payroll ID: ${payroll._id}`
+    });
 
     return res.status(200).json({
         status: http_status_text.SUCCESS,

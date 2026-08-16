@@ -2,6 +2,8 @@ const mongoose = require('mongoose');
 const Payment = require('../models/Payment');
 const Expense = require('../models/Expense');
 const TeacherPayroll = require('../models/TeacherPayroll');
+const Invoice = require('../models/Invoice');
+const SupervisorPayroll = require('../models/SupervisorPayroll');
 
 // =====================================================
 // Helper: Format Billing Month Safely (YYYY-MM)
@@ -68,7 +70,6 @@ const getFinancialData = async (academyId, start, end) => {
     const startDate = new Date(start);
     const endDate = new Date(end);
 
-    // استخراج صيغة YYYY-MM بناءً على التوقيت المحلي لمنع خطأ UTC Shift
     const startBillingMonth = formatBillingMonth(startDate);
     const endBillingMonth = formatBillingMonth(endDate);
 
@@ -137,7 +138,7 @@ const getFinancialData = async (academyId, start, end) => {
     ]);
 
     // 3. Teacher Payroll Aggregation
-    const payrollAgg = await TeacherPayroll.aggregate([
+    const teacherPayrollAgg = await TeacherPayroll.aggregate([
         {
             $match: {
                 academy_id: academyObjectId,
@@ -167,6 +168,61 @@ const getFinancialData = async (academyId, start, end) => {
         }
     ]);
 
+    // 4. Invoices Aggregation
+    const invoicesAgg = await Invoice.aggregate([
+        {
+            $match: {
+                academy_id: academyObjectId,
+                status: { $ne: 'cancelled' },
+                invoice_date: { $gte: startDate, $lte: endDate }
+            }
+        },
+        {
+            $group: {
+                _id: null,
+                count: { $sum: 1 },
+                totalAmount: { $sum: '$total_amount' },
+                remainingAmount: { $sum: '$remaining_amount' }
+            }
+        }
+    ]);
+
+    // 5. Supervisor Payroll Aggregation
+    const supervisorPayrollAgg = await SupervisorPayroll.aggregate([
+        {
+            $match: {
+                academy_id: academyObjectId,
+                billing_month: { $gte: startBillingMonth, $lte: endBillingMonth }
+            }
+        },
+        {
+            $group: {
+                _id: null,
+                total: { $sum: '$net_salary' },
+                paid: {
+                    $sum: { $cond: [{ $eq: ['$status', 'paid'] }, '$net_salary', 0] }
+                },
+                remaining: {
+                    $sum: { $cond: [{ $ne: ['$status', 'paid'] }, '$net_salary', 0] }
+                },
+                draft: {
+                    $sum: { $cond: [{ $eq: ['$status', 'draft'] }, 1, 0] }
+                },
+                approved: {
+                    $sum: { $cond: [{ $eq: ['$status', 'approved'] }, 1, 0] }
+                },
+                paid_payrolls: {
+                    $sum: { $cond: [{ $eq: ['$status', 'paid'] }, 1, 0] }
+                },
+                cancelled: {
+                    $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] }
+                },
+                count: { $sum: 1 }
+            }
+        }
+    ]);
+
+    // Extraction & Fallbacks
     const revenue = revenueAgg[0]?.totalRevenue || 0;
     const paymentCount = revenueAgg[0]?.count || 0;
 
@@ -178,17 +234,33 @@ const getFinancialData = async (academyId, start, end) => {
     const netProfit = revenue - expenses;
     const profitMargin = revenue > 0 ? ((netProfit / revenue) * 100).toFixed(2) : '0.00';
 
-    const payrollData = payrollAgg[0] || {};
+    const teacherData = teacherPayrollAgg[0] || {};
     const teacherPayroll = {
-        total: payrollData.total || 0,
-        paid: payrollData.paid || 0,
-        remaining: payrollData.remaining || 0,
-        pending: payrollData.pending || 0,
-        partially_paid: payrollData.partially_paid || 0,
-        paid_payrolls: payrollData.paid_payrolls || 0,
-        cancelled: payrollData.cancelled || 0,
-        count: payrollData.count || 0
+        total: teacherData.total || 0,
+        paid: teacherData.paid || 0,
+        remaining: teacherData.remaining || 0,
+        pending: teacherData.pending || 0,
+        partially_paid: teacherData.partially_paid || 0,
+        paid_payrolls: teacherData.paid_payrolls || 0,
+        cancelled: teacherData.cancelled || 0,
+        count: teacherData.count || 0
     };
+
+    const supervisorData = supervisorPayrollAgg[0] || {};
+    const supervisorPayroll = {
+        total: supervisorData.total || 0,
+        paid: supervisorData.paid || 0,
+        remaining: supervisorData.remaining || 0,
+        draft: supervisorData.draft || 0,
+        approved: supervisorData.approved || 0,
+        paid_payrolls: supervisorData.paid_payrolls || 0,
+        cancelled: supervisorData.cancelled || 0,
+        count: supervisorData.count || 0
+    };
+
+    const invoiceCount = invoicesAgg[0]?.count || 0;
+    const invoicedAmount = invoicesAgg[0]?.totalAmount || 0;
+    const invoicedRemainingAmount = invoicesAgg[0]?.remainingAmount || 0;
 
     return {
         revenue,
@@ -197,11 +269,12 @@ const getFinancialData = async (academyId, start, end) => {
         profit_margin: profitMargin,
         payment_count: paymentCount,
         expense_count: expenseCount,
-        invoice_count: 0,
-        invoiced_amount: 0,
+        invoice_count: invoiceCount,
+        invoiced_amount: invoicedAmount,
         invoiced_paid_amount: revenueAgg[0]?.invoicedPaidAmount || 0,
-        invoiced_remaining_amount: 0,
+        invoiced_remaining_amount: invoicedRemainingAmount,
         teacher_payroll: teacherPayroll,
+        supervisor_payroll: supervisorPayroll,
         expenses_by_category: expensesByCategory
     };
 };
