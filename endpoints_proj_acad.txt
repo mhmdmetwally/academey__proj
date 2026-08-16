@@ -118,3 +118,277 @@ Academy
 Teacher Invoice
   ↓
 Teacher
+
+
+////////////////////////////////
+
+المرحلة 1: تسجيل الحسابات والتوثيق (Auth & Academy Account)
+POST /users/register — تسجيل حساب جديد.  
+JS
+
+POST /users/login — تسجيل الدخول للحصول على Token.  
+JS
+
+POST /academies/register — تسجيل أكاديمية جديدة.  
+JS
+
+POST /academies/login — تسجيل دخول الأكاديمية.  
+JS
+
+GET /academies/me — جلب بيانات الأكاديمية (academy_admin).  
+JS
+
+PATCH /academies/me — تعديل بيانات الأكاديمية (academy_admin).  
+JS
+
+PATCH /academies/change-password — تغيير كلمة مرور الأكاديمية (academy_admin).  
+JS
+
+POST /academies/logout — تسجيل خروج الأكاديمية (academy_admin).  
+JS
+
+POST /users/logout — تسجيل الخروج العام.  
+JS
+
+المرحلة 2: لوحة تحكم السوبر أدمن (Super Admin Management)
+GET /admin/academy/showallacademy — عرض جميع الأكاديميات (super_admin).  
+JS
+
+GET /admin/academy/singleacademy/:academy_id — جلب بيانات أكاديمية محددة (super_admin).  
+JS
+
+GET /admin/academy/student_count/:academy_id — جلب إحصائيات طلاب الأكاديمية (super_admin).  
+JS
+
+PATCH /admin/academy/active/:academy_id — إعادة تفعيل أكاديمية (super_admin).  
+JS
+
+PATCH /admin/academy/stop/:academy_id — إيقاف أكاديمية (super_admin).  
+JS
+
+المرحلة 3: إعداد الطاقم الإداري والتعليمي (Supervisors & Teachers)
+POST /academies/supervisor — إنشاء حساب مشرف جديد (academy_admin).  
+JS
+
+GET /academies/supervisor — عرض كل مشرفي الأكاديمية (academy_admin).  
+JS
+
+GET /academies/supervisor/:supervisor_id — جلب بيانات مشرف واحد (academy_admin).  
+JS
+
+PATCH /academies/supervisor/active/:supervisor_id — تفعيل حساب المشرف (academy_admin).  
+JS
+
+PATCH /academies/supervisor/stop/:supervisor_id — إيقاف حساب المشرف (academy_admin).  
+JS
+
+GET /supervisors/my-academies — عرض الأكاديميات التابعة للمشرف (supervisor).  
+JS
+
+POST /teachers — إضافة معلم جديد (academy_admin, supervisor).  
+JS
+
+GET /teachers/academy-teachers — عرض جميع معلمي الأكاديمية (academy_admin).  
+JS
+
+GET /teachers/academy-teachers/:teacher_id — تفاصيل معلم بالأكاديمية (academy_admin).  
+JS
+
+PATCH /teachers/:teacher_id — تعديل بيانات تعيين المعلم (academy_admin).  
+JS
+
+GET /teachers/my-teachers — جلب معلمي المشرف الخاصين (supervisor).  
+JS
+
+GET /teachers/my-teachers/:teacher_id — تفاصيل معلم لدى المشرف (supervisor).  
+JS
+
+المرحلة 4: إعداد المواد الدراسية وربط المعلمين (Subjects)
+POST /subjects — إضافة مادة دراسية جديد (academy_admin).  
+JS
+
+GET /subjects — عرض كافة المواد الدراسية (academy_admin, supervisor, teacher).  
+JS
+
+GET /subjects/:subject_id — تفاصيل مادة محددة (academy_admin, supervisor, teacher).  
+JS
+
+PATCH /subjects/:subject_id — تعديل مادة دراسية (academy_admin).  
+JS
+
+POST /subjects/:subject_id/teacher/:teacher_id — ربط معلم بمادة محددة (academy_admin).  
+JS
+
+DELETE /subjects/:subject_id/teacher/:teacher_id — إزالة معلم من مادة (academy_admin).  
+JS
+
+المرحلة 5: العائلات والطلاب والربط الأكاديمي (Families, Students & Student Subjects)
+POST /families — إضافة عائلة جديدة (academy_admin, supervisor).  
+JS
+
+GET /families/academy-families — عرض عائلات الأكاديمية (academy_admin).  
+JS
+
+POST /students — إضافة طالب جديد (academy_admin, supervisor).  
+JS
+
+GET /students — جلب قائمة طلاب الأكاديمية (academy_admin).  
+JS
+
+GET /students/:student_id — جلب تفاصيل طالب واحد (academy_admin).  
+JS
+
+PATCH /students/:student_id — تحديث بيانات طالب (academy_admin).  
+JS
+
+GET /students/my-academies — جلب أكاديميات الطالب (student).  
+JS
+
+GET /supervisors/my-students — عرض طلاب المشرف (supervisor).  
+JS
+
+GET /supervisors/student/:student_id — جلب تفاصيل طالب لدى المشرف (supervisor).  
+JS
+
+POST /student-subjects/student/:student_assignment_id — إضافة مادة للطالب (academy_admin, supervisor).  
+JS
+
+GET /student-subjects/student/:student_assignment_id — عرض مواد الطالب المسجلة (academy_admin, supervisor).  
+JS
+
+PATCH /student-subjects/:student_subject_id/teacher — تغيير معلم الطالب (academy_admin, supervisor).  
+JS
+
+PATCH /student-subjects/:student_subject_id/price — تعديل سعر المادة للطالب (academy_admin, supervisor).  
+JS
+
+PATCH /student-subjects/:student_subject_id/monthly-lessons — تعديل الحصص الشهرية (academy_admin, supervisor).  
+JS
+
+DELETE /student-subjects/:student_subject_id — حذف مادة من الطالب (academy_admin, supervisor).  
+JS
+
+المرحلة 6: التشغيل اليومي والدروس (Lessons)
+POST /lessons — تسجيل درس جديد (academy_admin, supervisor).  
+JS
+
+GET /lessons — عرض جميع الدروس المتاحة (academy_admin, supervisor).  
+JS
+
+GET /lessons/student/:student_assignment_id — عرض دروس طالب معين (academy_admin, supervisor).  
+JS
+
+PATCH /lessons/:lesson_id/status — تحديث حالة الدرس (academy_admin, supervisor).  
+JS
+
+المرحلة 7: الفواتير، الخصومات والعوائد المالية (Discounts, Invoices & Payments)
+POST /family-discounts — إنشاء خصم عائلي جديد (academy_admin).  
+JS
+
+GET /family-discounts — عرض خصومات العائلات (academy_admin, supervisor).  
+JS
+
+GET /family-discounts/:discount_id — تفاصيل خصم محدد (academy_admin, supervisor).  
+JS
+
+PATCH /family-discounts/:discount_id — تعديل خصم عائلي (academy_admin).  
+JS
+
+DELETE /family-discounts/:discount_id — إلغاء خصم عائلي (academy_admin).  
+JS
+
+POST /invoices — إصدار فاتورة جديدة (academy_admin, supervisor).  
+JS
+
+GET /invoices — جلب كل الفواتير (academy_admin, supervisor).  
+JS
+
+GET /invoices/monthly-summary — ملخص الفواتير الشهرية للعائلات (academy_admin, supervisor).  
+JS
+
+GET /invoices/:invoice_id — جلب فاتورة معينة (academy_admin, supervisor).  
+JS
+
+POST /payments — تسجيل دفعة جديدة من ولي الأمر (academy_admin, supervisor).  
+JS
+
+GET /payments — عرض سجل المدفوعات (academy_admin, supervisor).  
+JS
+
+GET /payments/:payment_id — تفاصيل عملية دفع (academy_admin, supervisor).  
+JS
+
+GET /payments/invoice/:invoice_id — عرض مدفوعات فاتورة محددة (academy_admin, supervisor).  
+JS
+
+POST /payments/:payment_id/allocate — تخصيص دفعة مقدمة لفاتورة (academy_admin, supervisor).  
+JS
+
+GET /payments/monthly — مدفوعات العائلات الشهرية.  
+JS
+
+DELETE /payments/:payment_id — إلغاء عملية دفع (academy_admin).  
+JS
+
+DELETE /invoices/:invoice_id — إلغاء فاتورة (academy_admin).  
+JS
+
+المرحلة 8: إدارة المصروفات العامة (Expenses)
+POST /expenses — تسجيل مصروف تشغيلي جديد (academy_admin).  
+JS
+
+GET /expenses — عرض قائمة المصروفات (academy_admin, supervisor).  
+JS
+
+GET /expenses/:expense_id — تفاصيل مصروف محدد (academy_admin, supervisor).  
+JS
+
+PATCH /expenses/:expense_id — تعديل بيانات مصروف (academy_admin).  
+JS
+
+DELETE /expenses/:expense_id — إلغاء أو حذف مصروف (academy_admin).  
+JS
+
+المرحلة 9: نظام مرتبات المعلمين والمشرفين (Teacher & Supervisor Payrolls)
+POST /teacher-payrolls/generate — احتساب وإصدار مرتبات المعلمين (academy_admin, supervisor).  
+JS
+
+GET /teacher-payrolls — عرض مرتبات المعلمين (academy_admin, supervisor).  
+JS
+
+GET /teacher-payrolls/:payroll_id — جلب تفاصيل مرتب معلم (academy_admin, supervisor).  
+JS
+
+PATCH /teacher-payrolls/:payroll_id/discount — تطبيق خصم على مرتب معلم (academy_admin).  
+JS
+
+PATCH /teacher-payrolls/:payroll_id/pay — صرف مرتب المعلم (academy_admin, supervisor).  
+JS
+
+PATCH /teacher-payrolls/:payroll_id/cancel — إلغاء مرتب المعلم (academy_admin, supervisor).  
+JS
+
+POST /supervisor-payrolls — حساب/إنشاء مسودة مرتب مشرف (academy_admin, super_admin).  
+JS
+
+GET /supervisor-payrolls — عرض جميع مرتبات المشرفين (academy_admin, super_admin).  
+JS
+
+POST /supervisor-payrolls/:payroll_id/bonus — إضافة مكافأة لمرتب مشرف (academy_admin, super_admin).  
+JS
+
+DELETE /supervisor-payrolls/:payroll_id/bonus/:bonus_id — حذف مكافأة مشرف (academy_admin, super_admin).  
+JS
+
+POST /supervisor-payrolls/:payroll_id/deduction — إضافة خصم لمرتب مشرف (academy_admin, super_admin).  
+JS
+
+DELETE /supervisor-payrolls/:payroll_id/deduction/:deduction_id — حذف خصم مشرف (academy_admin, super_admin).  
+JS
+
+PATCH /supervisor-payrolls/:payroll_id/pay — صرف مرتب المشرف وإنشاء سند صرف تلقائي (academy_admin, super_admin).  
+JS
+
+المرحلة 10: التقارير المالية النهائية (Financial Reports)
+GET /financial/report — استخراج التقرير المالي الختامي الشامل (academy_admin).  
+JS
