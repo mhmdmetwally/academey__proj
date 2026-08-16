@@ -7,70 +7,383 @@ const app_error = require('../utils/AppError');
 const http_status_text = require('../utils/HttpStatusText');
 const { getAcademyId } = require('../utils/AccessScope');
 
-// =====================================================
-// 1. إنشاء / حساب مرتب المشرف للشهر (Draft)
-// =====================================================
-const calculateSupervisorPayroll = AsyncWrapper(async (req, res, next) => {
-    const academy_id = getAcademyId(req);
-    const { supervisor_id, billing_month, bonuses = [], deductions = [], notes } = req.body;
-
-    if (!supervisor_id || !billing_month) {
-        const error = new app_error();
-        error.create('supervisor_id and billing_month are required', 400, http_status_text.FAIL);
-        return next(error);
-    }
-
-    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(billing_month)) {
-        const error = new app_error();
-        error.create('billing_month must be in YYYY-MM format', 400, http_status_text.FAIL);
-        return next(error);
-    }
-
-    const supervisor = await Supervisor.findOne({
-        _id: supervisor_id,
-        academy_id,
-    });
-
-    if (!supervisor) {
-        const error = new app_error();
-        error.create('Supervisor not found in this academy', 404, http_status_text.FAIL);
-        return next(error);
-    }
-
-    const baseSalary = Number(supervisor.base_salary || 0);
-
-    let totalBonuses = bonuses.reduce((acc, b) => acc + Number(b.amount || 0), 0);
-    let totalDeductions = deductions.reduce((acc, d) => acc + Number(d.amount || 0), 0);
-
-    let netSalary = baseSalary + totalBonuses - totalDeductions;
-    if (netSalary < 0) netSalary = 0;
-
-    netSalary = Math.round(netSalary * 100) / 100;
-    totalBonuses = Math.round(totalBonuses * 100) / 100;
-    totalDeductions = Math.round(totalDeductions * 100) / 100;
-
-    const payroll = await SupervisorPayroll.findOneAndUpdate(
-        { academy_id, supervisor: supervisor_id, billing_month },
-        {
-            academy_id,
-            supervisor: supervisor_id,
-            billing_month,
-            base_salary: baseSalary,
-            bonuses,
-            total_bonuses: totalBonuses,
-            deductions,
-            total_deductions: totalDeductions,
-            net_salary: netSalary,
-            notes
-        },
-        { new: true, upsert: true, runValidators: true }
-    );
-
-    return res.status(200).json({
-        status: http_status_text.SUCCESS,
-        data: { payroll }
-    });
-});
+//===================================================== 
+// Calculate Supervisor Payroll 
+// ===================================================== 
+ 
+const calculateSupervisorPayroll = AsyncWrapper( 
+    async (req, res, next) => { 
+ 
+        const academy_id = 
+            getAcademyId(req); 
+ 
+        const { 
+            supervisor_id, 
+            billing_month, 
+            bonuses = [], 
+            deductions = [], 
+            notes 
+        } = req.body; 
+ 
+ 
+        // ===================================================== 
+        // Validate Required Fields 
+        // ===================================================== 
+ 
+        if ( 
+            !supervisor_id || 
+            !billing_month 
+        ) { 
+ 
+            const error = 
+                new app_error(); 
+ 
+            error.create( 
+                'supervisor_id and billing_month are required', 
+                400, 
+                http_status_text.FAIL 
+            ); 
+ 
+            return next(error); 
+        } 
+ 
+ 
+        // ===================================================== 
+        // Validate Billing Month 
+        // ===================================================== 
+ 
+        if ( 
+            !/^\d{4}-(0[1-9]|1[0-2])$/.test( 
+                billing_month 
+            ) 
+        ) { 
+ 
+            const error = 
+                new app_error(); 
+ 
+            error.create( 
+                'billing_month must be in YYYY-MM format', 
+                400, 
+                http_status_text.FAIL 
+            ); 
+ 
+            return next(error); 
+        } 
+ 
+ 
+        // ===================================================== 
+        // Validate Bonuses 
+        // ===================================================== 
+ 
+        if (!Array.isArray(bonuses)) { 
+ 
+            const error = 
+                new app_error(); 
+ 
+            error.create( 
+                'bonuses must be an array', 
+                400, 
+                http_status_text.FAIL 
+            ); 
+ 
+            return next(error); 
+        } 
+ 
+ 
+        for (const bonus of bonuses) { 
+ 
+            if ( 
+                bonus.amount === undefined || 
+                bonus.amount === null || 
+                Number(bonus.amount) < 0 
+            ) { 
+ 
+                const error = 
+                    new app_error(); 
+ 
+                error.create( 
+                    'Each bonus must have a valid amount', 
+                    400, 
+                    http_status_text.FAIL 
+                ); 
+ 
+                return next(error); 
+            } 
+ 
+            if ( 
+                !bonus.reason || 
+                !String(bonus.reason).trim() 
+            ) { 
+ 
+                const error = 
+                    new app_error(); 
+ 
+                error.create( 
+                    'Each bonus must have a reason', 
+                    400, 
+                    http_status_text.FAIL 
+                ); 
+ 
+                return next(error); 
+            } 
+        } 
+ 
+ 
+        // ===================================================== 
+        // Validate Deductions 
+        // ===================================================== 
+ 
+        if (!Array.isArray(deductions)) { 
+ 
+            const error = 
+                new app_error(); 
+ 
+            error.create( 
+                'deductions must be an array', 
+                400, 
+                http_status_text.FAIL 
+            ); 
+ 
+            return next(error); 
+        } 
+ 
+ 
+        for (const deduction of deductions) { 
+ 
+            if ( 
+                deduction.amount === undefined || 
+                deduction.amount === null || 
+                Number(deduction.amount) < 0 
+            ) { 
+ 
+                const error = 
+                    new app_error(); 
+ 
+                error.create( 
+                    'Each deduction must have a valid amount', 
+                    400, 
+                    http_status_text.FAIL 
+                ); 
+ 
+                return next(error); 
+            } 
+ 
+            if ( 
+                !deduction.reason || 
+                !String(deduction.reason).trim() 
+            ) { 
+ 
+                const error = 
+                    new app_error(); 
+ 
+                error.create( 
+                    'Each deduction must have a reason', 
+                    400, 
+                    http_status_text.FAIL 
+                ); 
+ 
+                return next(error); 
+            } 
+        } 
+ 
+ 
+        // ===================================================== 
+        // Find Supervisor 
+        // ===================================================== 
+ 
+        const supervisor = 
+            await Supervisor.findOne({ 
+                _id: supervisor_id, 
+                academy_id 
+            }); 
+ 
+ 
+        if (!supervisor) { 
+ 
+            const error = 
+                new app_error(); 
+ 
+            error.create( 
+                'Supervisor not found in this academy', 
+                404, 
+                http_status_text.FAIL 
+            ); 
+ 
+            return next(error); 
+        } 
+ 
+ 
+        // ===================================================== 
+        // Get Base Salary 
+        // ===================================================== 
+ 
+        const baseSalary = 
+            Number( 
+                supervisor.base_salary || 0 
+            ); 
+ 
+ 
+        // ===================================================== 
+        // Calculate Bonuses 
+        // ===================================================== 
+ 
+        let totalBonuses = 
+            bonuses.reduce( 
+                (acc, bonus) => { 
+ 
+                    return acc + 
+                        Number( 
+                            bonus.amount || 0 
+                        ); 
+ 
+                }, 
+                0 
+            ); 
+ 
+ 
+        // ===================================================== 
+        // Calculate Deductions 
+        // ===================================================== 
+ 
+        let totalDeductions = 
+            deductions.reduce( 
+                (acc, deduction) => { 
+ 
+                    return acc + 
+                        Number( 
+                            deduction.amount || 0 
+                        ); 
+ 
+                }, 
+                0 
+            ); 
+ 
+ 
+        // ===================================================== 
+        // Calculate Net Salary 
+        // ===================================================== 
+ 
+        let netSalary = 
+            baseSalary + 
+            totalBonuses - 
+            totalDeductions; 
+ 
+ 
+        // لا يمكن أن يكون الصافي أقل من صفر 
+        if (netSalary < 0) { 
+            netSalary = 0; 
+        } 
+ 
+ 
+        // ===================================================== 
+        // Round Numbers 
+        // ===================================================== 
+ 
+        totalBonuses = 
+            Math.round( 
+                totalBonuses * 100 
+            ) / 100; 
+ 
+ 
+        totalDeductions = 
+            Math.round( 
+                totalDeductions * 100 
+            ) / 100; 
+ 
+ 
+        netSalary = 
+            Math.round( 
+                netSalary * 100 
+            ) / 100; 
+ 
+ 
+        // ===================================================== 
+        // Create / Update Payroll 
+        // ===================================================== 
+ 
+        /* 
+            نفس: 
+ 
+            academy_id 
+            supervisor 
+            billing_month 
+ 
+            = نفس Payroll 
+ 
+            لو موجود: 
+                Update 
+ 
+            لو غير موجود: 
+                Create 
+ 
+            وبالتالي لن يكون هناك 
+            سجلين لنفس المشرف في نفس 
+            الأكاديمية ونفس الشهر. 
+        */ 
+ 
+        const payroll = 
+            await SupervisorPayroll.findOneAndUpdate( 
+ 
+                { 
+                    academy_id, 
+                    supervisor: supervisor_id, 
+                    billing_month 
+                }, 
+ 
+                { 
+                    $set: { 
+                        academy_id, 
+                        supervisor: supervisor_id, 
+                        billing_month, 
+ 
+                        base_salary: 
+                            baseSalary, 
+ 
+                        bonuses, 
+ 
+                        total_bonuses: 
+                            totalBonuses, 
+ 
+                        deductions, 
+ 
+                        total_deductions: 
+                            totalDeductions, 
+ 
+                        net_salary: 
+                            netSalary, 
+ 
+                        notes 
+                    } 
+                }, 
+ 
+                { 
+                    new: true, 
+                    upsert: true, 
+                    runValidators: true, 
+                    setDefaultsOnInsert: true 
+                } 
+            ); 
+ 
+ 
+        // ===================================================== 
+        // Response 
+        // ===================================================== 
+ 
+        return res.status(200).json({ 
+ 
+            status: 
+                http_status_text.SUCCESS, 
+ 
+            data: { 
+                payroll 
+            } 
+ 
+        }); 
+ 
+    } 
+); 
+ 
+ 
 
 // =====================================================
 // 2. إضافة مكافأة (Bonus) لسجل مرتب مشرف
