@@ -6,6 +6,8 @@ const StudentAssignment =require('../models/StudentAssignment');
 
 const StudentSubject =require('../models/StudentSubject');
 
+const Subject =require('../models/Subject') ;
+
 const TeacherAssignment =require('../models/TeacherAssignment');
 
 const app_error =require('../utils/AppError');
