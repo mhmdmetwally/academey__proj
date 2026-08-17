@@ -6,6 +6,12 @@ const AsyncWrapper =
 const TeacherPayroll =
     require('../models/TeacherPayroll');
 
+const TeacherAssignment = 
+    require('../models/TeacherAssignment');
+
+const Supervisor = 
+    require('../models/Supervisor');
+    
 const Lesson =
     require('../models/Lesson');
 
