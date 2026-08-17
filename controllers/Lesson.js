@@ -262,7 +262,7 @@ const createLesson = AsyncWrapper(async (req, res, next) => {
     const subject =
         await Subject.findOne({
             _id: studentSubject.subject,
-            academy: academy_id,
+            academy_id,
             is_active: true
         });
 
@@ -283,15 +283,15 @@ const createLesson = AsyncWrapper(async (req, res, next) => {
 
 
     // =========================================
-    // Selected Teacher must be assigned
-    // to this Subject
+    // Selected TeacherAssignment must
+    // be assigned to this Subject
     // =========================================
 
     const teacherIsAssignedToSubject =
         subject.teachers.some(
-            teacherId =>
-                String(teacherId) ===
-                String(teacherAssignment.teacher)
+            teacherAssignmentId =>
+                String(teacherAssignmentId) ===
+                String(teacher_assignment_id)
         );
 
 
@@ -308,7 +308,6 @@ const createLesson = AsyncWrapper(async (req, res, next) => {
 
         return next(error);
     }
-
 
     // =========================================
     // Same Academy Checks
