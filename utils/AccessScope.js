@@ -7,215 +7,459 @@ const Lesson = require('../models/Lesson');
 const Supervisor = require('../models/Supervisor');
 const user_role = require('./UserRole');
 
+
 // =====================================================
-// Get Academy ID (تعديل آمن)
+// Get Academy ID
 // =====================================================
+
 const getAcademyId = (req) => {
+
     if (!req || !req.user) {
         return null;
     }
 
-    if (req.user.role === user_role.academy_admin) {
+    if (
+        req.user.role ===
+        user_role.academy_admin
+    ) {
         return req.user.id;
     }
 
     return req.user.academy_id;
 };
 
+
 // =====================================================
 // Validate ObjectId
 // =====================================================
+
 const isValidObjectId = (id) => {
+
     return mongoose.Types.ObjectId.isValid(id);
+
 };
 
+
 // =====================================================
-// Get Supervisor Assignment (تعديل آمن)
+// Get Supervisor
 // =====================================================
+
 const getSupervisor = async (req) => {
 
     if (!req || !req.user) {
         return null;
     }
 
-    const academy_id = getAcademyId(req);
+
+    const academy_id =
+        getAcademyId(req);
+
 
     if (!academy_id) {
         return null;
     }
 
-    if (req.user.role !== user_role.supervisor) {
+
+    if (
+        req.user.role !==
+        user_role.supervisor
+    ) {
         return null;
     }
+
+
+    // IMPORTANT:
+    // req.user.id = User ID
+    // Supervisor.user = User ID
 
     return await Supervisor.findOne({
-        _id: req.user.id,
-        academy_id
+
+        user:
+            req.user.id,
+
+        academy_id,
+
+        is_active: true
+
     });
+
 };
 
+
 // =====================================================
-// Student Access (تعديل آمن)
+// Student Access
 // =====================================================
-const getStudentAssignmentForUser = async (req, student_assignment_id) => {
-    if (!isValidObjectId(student_assignment_id)) {
+
+const getStudentAssignmentForUser = async (
+    req,
+    student_assignment_id
+) => {
+
+    if (
+        !isValidObjectId(
+            student_assignment_id
+        )
+    ) {
         return null;
     }
 
-    const academy_id = getAcademyId(req);
+
+    const academy_id =
+        getAcademyId(req);
+
+
     if (!academy_id) {
         return null;
     }
 
-    if (req?.user?.role === user_role.academy_admin) {
+
+    // =================================================
+    // Academy Admin
+    // =================================================
+
+    if (
+        req?.user?.role ===
+        user_role.academy_admin
+    ) {
+
         return await StudentAssignment.findOne({
-            _id: student_assignment_id,
-            academy_id,
+
+            _id:
+                student_assignment_id,
+
+            academy_id
+
         });
+
     }
 
-    if (req?.user?.role === user_role.supervisor) {
-        const supervisor = await getSupervisor(req);
+
+    // =================================================
+    // Supervisor
+    // =================================================
+
+    if (
+        req?.user?.role ===
+        user_role.supervisor
+    ) {
+
+        const supervisor =
+            await getSupervisor(req);
+
+
         if (!supervisor) {
             return null;
         }
 
+
         return await StudentAssignment.findOne({
-            _id: student_assignment_id,
+
+            _id:
+                student_assignment_id,
+
             academy_id,
-            supervisor: supervisor._id,
+
+            supervisor:
+                supervisor._id
+
         });
+
     }
 
+
     return null;
+
 };
 
+
 // =====================================================
-// Teacher Access (تعديل آمن)
+// Teacher Access
 // =====================================================
-const getTeacherAssignmentForUser = async (req, teacher_assignment_id) => {
-    if (!isValidObjectId(teacher_assignment_id)) {
+
+const getTeacherAssignmentForUser = async (
+    req,
+    teacher_assignment_id
+) => {
+
+    if (
+        !isValidObjectId(
+            teacher_assignment_id
+        )
+    ) {
         return null;
     }
 
-    const academy_id = getAcademyId(req);
+
+    const academy_id =
+        getAcademyId(req);
+
+
     if (!academy_id) {
         return null;
     }
 
-    if (req?.user?.role === user_role.academy_admin) {
+
+    // =================================================
+    // Academy Admin
+    // =================================================
+
+    if (
+        req?.user?.role ===
+        user_role.academy_admin
+    ) {
+
         return await TeacherAssignment.findOne({
-            _id: teacher_assignment_id,
-            academy_id,
+
+            _id:
+                teacher_assignment_id,
+
+            academy_id
+
         });
+
     }
 
-    if (req?.user?.role === user_role.supervisor) {
-        const supervisor = await getSupervisor(req);
+
+    // =================================================
+    // Supervisor
+    // =================================================
+
+    if (
+        req?.user?.role ===
+        user_role.supervisor
+    ) {
+
+        const supervisor =
+            await getSupervisor(req);
+
+
         if (!supervisor) {
             return null;
         }
 
+
         return await TeacherAssignment.findOne({
-            _id: teacher_assignment_id,
+
+            _id:
+                teacher_assignment_id,
+
             academy_id,
-            supervisor: supervisor._id,
+
+            supervisor:
+                supervisor._id
+
         });
+
     }
 
+
     return null;
+
 };
+
 
 // =====================================================
 // Student Subject Access
 // =====================================================
-const getStudentSubjectForUser = async (req, student_subject_id) => {
-    if (!isValidObjectId(student_subject_id)) {
+
+const getStudentSubjectForUser = async (
+    req,
+    student_subject_id
+) => {
+
+    if (
+        !isValidObjectId(
+            student_subject_id
+        )
+    ) {
         return null;
     }
 
-    const academy_id = getAcademyId(req);
+
+    const academy_id =
+        getAcademyId(req);
+
+
     if (!academy_id) {
         return null;
     }
 
-    const studentSubject = await StudentSubject.findOne({
-        _id: student_subject_id,
-        academy_id,
-    });
+
+    // =================================================
+    // Find Student Subject
+    // =================================================
+
+    const studentSubject =
+        await StudentSubject.findOne({
+
+            _id:
+                student_subject_id,
+
+            academy_id
+
+        });
+
 
     if (!studentSubject) {
         return null;
     }
 
-    const studentAssignment = await getStudentAssignmentForUser(
-        req,
-        studentSubject.student_assignment
-    );
+
+    // =================================================
+    // Check Student Access
+    // =================================================
+
+    const studentAssignment =
+        await getStudentAssignmentForUser(
+
+            req,
+
+            studentSubject.student_assignment
+
+        );
+
 
     if (!studentAssignment) {
         return null;
     }
 
-    const teacherAssignment = await TeacherAssignment.findOne({
-        _id: studentSubject.teacher,
-        academy_id,
-    });
+
+    // =================================================
+    // Check Current Teacher Assignment
+    // =================================================
+
+    const teacherAssignment =
+        await TeacherAssignment.findOne({
+
+            _id:
+                studentSubject.teacher,
+
+            academy_id
+
+        });
+
 
     if (!teacherAssignment) {
         return null;
     }
 
+
     return studentSubject;
+
 };
 
+
 // =====================================================
-// Lesson Access (تعديل آمن)
+// Lesson Access
 // =====================================================
-const getLessonForUser = async (req, lesson_id) => {
-    if (!isValidObjectId(lesson_id)) {
+
+const getLessonForUser = async (
+    req,
+    lesson_id
+) => {
+
+    if (
+        !isValidObjectId(
+            lesson_id
+        )
+    ) {
         return null;
     }
 
-    const academy_id = getAcademyId(req);
+
+    const academy_id =
+        getAcademyId(req);
+
+
     if (!academy_id) {
         return null;
     }
 
-    const lesson = await Lesson.findOne({
-        _id: lesson_id,
-        academy_id
-    });
+
+    // =================================================
+    // Find Lesson
+    // =================================================
+
+    const lesson =
+        await Lesson.findOne({
+
+            _id:
+                lesson_id,
+
+            academy_id
+
+        });
+
 
     if (!lesson) {
         return null;
     }
 
-    if (req?.user?.role === user_role.academy_admin) {
+
+    // =================================================
+    // Academy Admin
+    // =================================================
+
+    if (
+        req?.user?.role ===
+        user_role.academy_admin
+    ) {
+
         return lesson;
+
     }
 
-    if (req?.user?.role === user_role.supervisor) {
-        const studentAssignment = await getStudentAssignmentForUser(
-            req,
-            lesson.student_assignment
-        );
+
+    // =================================================
+    // Supervisor
+    // =================================================
+
+    if (
+        req?.user?.role ===
+        user_role.supervisor
+    ) {
+
+        const studentAssignment =
+            await getStudentAssignmentForUser(
+
+                req,
+
+                lesson.student_assignment
+
+            );
+
 
         if (!studentAssignment) {
             return null;
         }
 
+
         return lesson;
+
     }
 
+
     return null;
+
 };
 
+
+// =====================================================
+// Export
+// =====================================================
+
 module.exports = {
+
     getAcademyId,
+
     getSupervisor,
+
     getStudentAssignmentForUser,
+
     getTeacherAssignmentForUser,
+
     getStudentSubjectForUser,
+
     getLessonForUser
+
 };
