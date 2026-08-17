@@ -34,7 +34,6 @@ return result;
 };
 
 // =====================================================// Create Lesson// =====================================================
-
 const createLesson = AsyncWrapper(async (req, res, next) => {
 
     const academy_id =
@@ -107,7 +106,9 @@ const createLesson = AsyncWrapper(async (req, res, next) => {
     // =========================================
 
     const normalizedDate =
-        normalizeLessonDate(lesson_date);
+        normalizeLessonDate(
+            lesson_date
+        );
 
 
     if (!normalizedDate) {
@@ -178,8 +179,8 @@ const createLesson = AsyncWrapper(async (req, res, next) => {
 
 
     // =========================================
-    // Student Subject must belong to
-    // the same StudentAssignment
+    // Student Subject must belong
+    // to the same StudentAssignment
     // =========================================
 
     if (
@@ -229,22 +230,76 @@ const createLesson = AsyncWrapper(async (req, res, next) => {
 
 
     // =========================================
-    // Teacher must be the teacher
-    // assigned to StudentSubject
+    // Teacher must belong to same Academy
     // =========================================
 
     if (
         String(
-            studentSubject.teacher
+            teacherAssignment.academy_id
         ) !==
-        String(teacher_assignment_id)
+        String(academy_id)
     ) {
 
         const error =
             new app_error();
 
         error.create(
-            'this teacher is not assigned to this student subject',
+            'teacher does not belong to this academy',
+            403,
+            http_status_text.FAIL
+        );
+
+        return next(error);
+    }
+
+
+    // =========================================
+    // Subject
+    // =========================================
+
+    const subject =
+        await Subject.findOne({
+            _id: studentSubject.subject,
+            academy: academy_id,
+            is_active: true
+        });
+
+
+    if (!subject) {
+
+        const error =
+            new app_error();
+
+        error.create(
+            'subject not found or inactive',
+            404,
+            http_status_text.FAIL
+        );
+
+        return next(error);
+    }
+
+
+    // =========================================
+    // Selected Teacher must be assigned
+    // to this Subject
+    // =========================================
+
+    const teacherIsAssignedToSubject =
+        subject.teachers.some(
+            teacherId =>
+                String(teacherId) ===
+                String(teacherAssignment.teacher)
+        );
+
+
+    if (!teacherIsAssignedToSubject) {
+
+        const error =
+            new app_error();
+
+        error.create(
+            'this teacher is not assigned to this subject',
             400,
             http_status_text.FAIL
         );
@@ -289,26 +344,6 @@ const createLesson = AsyncWrapper(async (req, res, next) => {
 
         error.create(
             'student subject does not belong to this academy',
-            403,
-            http_status_text.FAIL
-        );
-
-        return next(error);
-    }
-
-
-    if (
-        String(
-            teacherAssignment.academy_id
-        ) !==
-        String(academy_id)
-    ) {
-
-        const error =
-            new app_error();
-
-        error.create(
-            'teacher does not belong to this academy',
             403,
             http_status_text.FAIL
         );
@@ -367,9 +402,9 @@ const createLesson = AsyncWrapper(async (req, res, next) => {
 
     } catch (error) {
 
-        // =====================================
+        // =========================================
         // Duplicate lesson
-        // =====================================
+        // =========================================
 
         if (
             error &&
@@ -394,9 +429,7 @@ const createLesson = AsyncWrapper(async (req, res, next) => {
         return next(error);
     }
 
-}
-
-);
+});
 
 // =====================================================// Get All Accessible Lessons// =====================================================
 

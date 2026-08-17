@@ -33,11 +33,13 @@ const isValidObjectId = (id) => {
 // Get Supervisor Assignment (تعديل آمن)
 // =====================================================
 const getSupervisor = async (req) => {
+
     if (!req || !req.user) {
         return null;
     }
 
     const academy_id = getAcademyId(req);
+
     if (!academy_id) {
         return null;
     }
@@ -47,8 +49,8 @@ const getSupervisor = async (req) => {
     }
 
     return await Supervisor.findOne({
-        user: req.user.id,
-        academy_id,
+        _id: req.user.id,
+        academy_id
     });
 };
 
