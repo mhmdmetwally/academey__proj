@@ -65,19 +65,21 @@ const createFamily = AsyncWrapper(
 
             });
 
+            if (existing_family) {
 
-        if (existing_family) {
+            return res.status(200).json({
 
-            const error =
-                new app_error();
+                status:
+                    http_status_text.SUCCESS,
 
-            error.create(
-                'family with this name and phone already exists',
-                409,
-                http_status_text.FAIL
-            );
+                data: {
 
-            return next(error);
+                    family: existing_family
+
+                }
+
+            });
+
         }
 
 
