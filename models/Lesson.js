@@ -132,7 +132,8 @@ LessonSchema.index(
         student_assignment: 1,
         student_subject: 1,
         teacher: 1,
-        lesson_date: 1
+        lesson_date: 1,
+        status:1,
     },
     {
         unique: true,
